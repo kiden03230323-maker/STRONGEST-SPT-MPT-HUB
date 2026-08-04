@@ -169,7 +169,7 @@ To initialize EXO HUB v8.0 within a compatible execution environment, execute th
 
 Lua
 -- EXO HUB v8.0 - SENTINEL AI LOADER
-loadstring(game:HttpGet("YOUR_SCRIPT_URL_HERE"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/kiden03230323-maker/STRONGEST-SPT-MPT-HUB/refs/heads/main/MainHub.lua"))()
 
 
 System Requirements
