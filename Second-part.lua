@@ -1,3 +1,727 @@
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 13: SENTINEL AI – STRATEGY ENGINE                         ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function AI_FormulateStrategy(profile, killData)
+    local strategy = {
+        Target = profile.Name,
+        Actions = {},
+        Explanations = {},
+        Priority = "NORMAL",
+        Confidence = 0,
+        FeatureCombos = {},
+    }
+
+    local threats = profile.SuspectedFeatures
+    local avgDist = profile.AvgDistance
+    local avgTTK = profile.AvgTTK
+    local totalKills = profile.TotalKills
+
+    -- Determine priority
+    if profile.ThreatScore >= 80 or totalKills >= 5 then
+        strategy.Priority = "CRITICAL"
+    elseif profile.ThreatScore >= 50 or totalKills >= 3 then
+        strategy.Priority = "HIGH"
+    end
+
+    -- BUILD COUNTER-STRATEGY BASED ON DETECTED FEATURES
+    for _, feature in ipairs(threats) do
+        if feature == "LoopBring" then
+            table.insert(strategy.Actions, {type = "enable", feature = "FastRespawn", reason = "Minimize downtime between deaths"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiSpawnkill", reason = "Prevent immediate re-kill on spawn"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "ForceField blocks touch-based loopbring"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "NoCollide prevents touch contact"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Repel", reason = "Push their tools away from you"})
+            table.insert(strategy.Explanations,
+                "They're using LOOPBRING - teleporting their weapon to you repeatedly. " ..
+                "Average TTK: " .. string.format("%.2f", avgTTK) .. "s. " ..
+                "I'm activating a 5-layer defense: FastRespawn + AntiSpawnkill + GodMode + Phase + Repel.")
+
+        elseif feature == "KillAura" then
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Enabled", reason = "Master anti-aura switch"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "ForceField negates aura damage"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Repel", reason = "Push their aura tools away"})
+            table.insert(strategy.Actions, {type = "set", feature = "AntiAura.RepelForce", value = 150, reason = "Maximum repel force to break aura range"})
+            table.insert(strategy.Actions, {type = "set", feature = "AntiAura.RepelRadius", value = 25, reason = "Extended repel radius"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "Phase through their aura hits"})
+            table.insert(strategy.Explanations,
+                "KILL AURA detected. They're damaging you through tool proximity without swinging. " ..
+                "Avg distance: " .. math.floor(avgDist) .. " studs. " ..
+                "Counter: Full Anti-Aura suite with boosted repel force (150) and radius (25).")
+
+        elseif feature == "Reach" then
+            table.insert(strategy.Actions, {type = "enable", feature = "Reach", reason = "Match their reach"})
+            table.insert(strategy.Actions, {type = "set", feature = "ReachSize", value = math.max(4, math.ceil(avgDist / 8)), reason = "Scale reach to counter theirs"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "Phase to avoid their extended hitbox"})
+            table.insert(strategy.Actions, {type = "enable", feature = "InstaKillEnabled", reason = "Strike first before they reach you"})
+            table.insert(strategy.Explanations,
+                "REACH user detected. Killing you from " .. math.floor(avgDist) .. " studs away. " ..
+                "I'm setting your reach to " .. math.max(4, math.ceil(avgDist / 8)) .. "x to match/exceed theirs, " ..
+                "plus Phase mode and InstaKill to strike first.")
+
+        elseif feature == "FastKill" or feature == "RemoteSpam" then
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "ForceField blocks remote damage"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.HealAura", reason = "Auto-heal to outpace their DPS"})
+            table.insert(strategy.Actions, {type = "enable", feature = "FastRespawn", reason = "Minimize death downtime"})
+            table.insert(strategy.Actions, {type = "enable", feature = "InstaKillEnabled", reason = "Kill them before they can spam again"})
+            table.insert(strategy.Actions, {type = "set", feature = "IK_BurstCount", value = 15, reason = "Maximum burst to overwhelm their defense"})
+            table.insert(strategy.Explanations,
+                "FAST KILL / REMOTE SPAM detected. TTK: " .. string.format("%.2f", avgTTK) .. "s. " ..
+                "They're firing damage remotes as fast as possible. " ..
+                "Counter: GodMode + HealAura to survive, InstaKill with 15-burst to end them first.")
+
+        elseif feature == "FightEventAbuse" then
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Enabled", reason = "Full defense suite"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "Block FightEvent damage"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiSpawnkill", reason = "Protect after respawn"})
+            table.insert(strategy.Explanations,
+                "FIGHT EVENT ABUSE detected. No visible weapon but taking damage. " ..
+                "They're directly firing FightEvent remotes. GodMode ForceField blocks this.")
+
+        elseif feature == "HitAmplifier" then
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "Phase out of their overlap scan"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Repel", reason = "Push tools out of scan range"})
+            table.insert(strategy.Actions, {type = "enable", feature = "FastRespawn", reason = "Quick recovery"})
+            table.insert(strategy.Explanations,
+                "HIT AMPLIFIER detected. They're scanning a " .. math.floor(avgDist) .. " stud radius. " ..
+                "Phase mode makes you invisible to their OverlapParams scan.")
+
+        elseif feature == "ToolFollow" then
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Repel", reason = "Push their following tools away"})
+            table.insert(strategy.Actions, {type = "set", feature = "AntiAura.RepelForce", value = 200, reason = "Max force to break tool follow"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "Phase through followed tools"})
+            table.insert(strategy.Explanations,
+                "TOOL FOLLOW detected. Their weapons are tracking your body. " ..
+                "Repel at force 200 + Phase will break their tracking.")
+
+        elseif feature == "SpawnKill" then
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiSpawnkill", reason = "Extended spawn protection"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "ForceField on spawn"})
+            table.insert(strategy.Actions, {type = "enable", feature = "FastRespawn", reason = "Quick respawn to reset position"})
+            table.insert(strategy.Explanations,
+                "SPAWN KILL detected. They're camping your spawn point. " ..
+                "AntiSpawnkill gives you 5 seconds of invincibility on spawn.")
+        end
+    end
+
+    -- If no specific features detected but still dying
+    if #strategy.Actions == 0 then
+        table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Enabled", reason = "General defense"})
+        table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "ForceField protection"})
+        table.insert(strategy.Actions, {type = "enable", feature = "FastRespawn", reason = "Quick recovery"})
+        table.insert(strategy.Explanations,
+            "General threat detected from " .. profile.Name .. ". " ..
+            "Activating standard defense suite while I gather more data.")
+    end
+
+    -- Add offensive counter if threat is high
+    if profile.ThreatScore >= 60 then
+        table.insert(strategy.Actions, {type = "enable", feature = "Aura.Enabled", reason = "Offensive pressure"})
+        table.insert(strategy.Actions, {type = "enable", feature = "InstaKillEnabled", reason = "Eliminate threat quickly"})
+        table.insert(strategy.Explanations,
+            "Threat score is " .. profile.ThreatScore .. "/100. " ..
+            "Activating offensive counter: Aura + InstaKill targeting " .. profile.Name .. " specifically.")
+    end
+
+    strategy.Confidence = math.min(95, 40 + (profile.TotalKills * 10) + (#strategy.Actions * 5))
+    return strategy
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 14: SENTINEL AI – EXECUTION ENGINE                        ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function AI_ExecuteStrategy(strategy)
+    if not strategy or not strategy.Actions then return end
+
+    for _, action in ipairs(strategy.Actions) do
+        pcall(function()
+            if action.type == "enable" then
+                if action.feature == "FastRespawn" then
+                    FastRespawn = true
+                    startFastRespawn()
+                elseif action.feature == "AntiSpawnkill" then
+                    AntiSpawnkill = true
+                elseif action.feature == "AntiAura.Enabled" then
+                    AntiAura.Enabled = true
+                    startAntiAura()
+                elseif action.feature == "AntiAura.GodMode" then
+                    AntiAura.GodMode = true
+                elseif action.feature == "AntiAura.Repel" then
+                    AntiAura.Repel = true
+                elseif action.feature == "AntiAura.Phase" then
+                    AntiAura.Phase = true
+                elseif action.feature == "AntiAura.HealAura" then
+                    AntiAura.HealAura = true
+                elseif action.feature == "Reach" then
+                    Reach = true
+                    applyReach()
+                elseif action.feature == "InstaKillEnabled" then
+                    InstaKillEnabled = true
+                    startInstaKill()
+                elseif action.feature == "Aura.Enabled" then
+                    Aura.Enabled = true
+                    if strategy.Target then
+                        local targetPlr = Players:FindFirstChild(strategy.Target)
+                        if targetPlr then
+                            Aura.TargetList = {targetPlr}
+                        end
+                    end
+                    startAuraLoop()
+                elseif action.feature == "HitAmpEnabled" then
+                    HitAmpEnabled = true
+                    startHitAmplifier()
+                end
+
+            elseif action.type == "set" then
+                if action.feature == "ReachSize" then
+                    ReachSize = action.value
+                    if Reach then stopReach(); applyReach() end
+                elseif action.feature == "IK_BurstCount" then
+                    IK_BurstCount = action.value
+                elseif action.feature == "AntiAura.RepelForce" then
+                    AntiAura.RepelForce = action.value
+                elseif action.feature == "AntiAura.RepelRadius" then
+                    AntiAura.RepelRadius = action.value
+                elseif action.feature == "HA_Range" then
+                    HA_Range = Vector3.new(action.value, action.value, action.value)
+                end
+
+            elseif action.type == "disable" then
+                -- Reserved for future adaptive disabling
+            end
+        end)
+    end
+
+    -- Record strategy execution
+    table.insert(StrategyEngine.StrategyHistory, {
+        time = os.time(),
+        target = strategy.Target,
+        priority = strategy.Priority,
+        actionCount = #strategy.Actions,
+    })
+    if #StrategyEngine.StrategyHistory > 50 then
+        table.remove(StrategyEngine.StrategyHistory, 1)
+    end
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 15: SENTINEL AI – CHAT UI SYSTEM                          ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function Chat_CreateGUI()
+    if ChatSystem.GUI then return end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "EXO_SentinelChat"
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    pcall(function() gui.Parent = CoreGui end)
+    if not gui.Parent then gui.Parent = player:WaitForChild("PlayerGui") end
+    ChatSystem.GUI = gui
+
+    -- Main chat window
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "ChatMain"
+    mainFrame.Size = UDim2.new(0, 380, 0, 460)
+    mainFrame.Position = UDim2.new(1, -400, 0.5, -230)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Parent = gui
+    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = AccentColor
+    stroke.Thickness = 2
+    stroke.Parent = mainFrame
+
+    -- Title bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1, 0, 0, 36)
+    titleBar.BackgroundColor3 = Color3.fromRGB(16, 20, 30)
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
+    Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 12)
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -80, 1, 0)
+    titleLabel.Position = UDim2.new(0, 40, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "EXO SENTINEL AI"
+    titleLabel.TextColor3 = AccentColor
+    titleLabel.TextSize = 14
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = titleBar
+
+    -- Status indicator
+    local statusDot = Instance.new("Frame")
+    statusDot.Name = "StatusDot"
+    statusDot.Size = UDim2.new(0, 8, 0, 8)
+    statusDot.Position = UDim2.new(0, 12, 0.5, -4)
+    statusDot.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
+    statusDot.BorderSizePixel = 0
+    statusDot.Parent = titleBar
+    Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
+
+    -- Minimize button
+    local minBtn = Instance.new("TextButton")
+    minBtn.Size = UDim2.new(0, 24, 0, 24)
+    minBtn.Position = UDim2.new(1, -30, 0.5, -12)
+    minBtn.BackgroundTransparency = 1
+    minBtn.Text = "—"
+    minBtn.TextColor3 = SubTextColor
+    minBtn.TextSize = 16
+    minBtn.Font = Enum.Font.GothamBold
+    minBtn.Parent = titleBar
+
+    -- Robot display area
+    local robotArea = Instance.new("Frame")
+    robotArea.Name = "RobotArea"
+    robotArea.Size = UDim2.new(1, 0, 0, 80)
+    robotArea.Position = UDim2.new(0, 0, 0, 36)
+    robotArea.BackgroundColor3 = Color3.fromRGB(8, 10, 16)
+    robotArea.BorderSizePixel = 0
+    robotArea.Parent = mainFrame
+
+    -- Robot body
+    local robotBody = Instance.new("Frame")
+    robotBody.Name = "RobotBody"
+    robotBody.Size = UDim2.new(0, 40, 0, 40)
+    robotBody.Position = UDim2.new(0, 15, 0.5, -20)
+    robotBody.BackgroundColor3 = AccentColor
+    robotBody.BorderSizePixel = 0
+    robotBody.Parent = robotArea
+    Instance.new("UICorner", robotBody).CornerRadius = UDim.new(0, 8)
+
+    -- Robot eyes
+    local eyeL = Instance.new("Frame")
+    eyeL.Name = "EyeL"
+    eyeL.Size = UDim2.new(0, 8, 0, 8)
+    eyeL.Position = UDim2.new(0, 8, 0, 12)
+    eyeL.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    eyeL.BorderSizePixel = 0
+    eyeL.Parent = robotBody
+    Instance.new("UICorner", eyeL).CornerRadius = UDim.new(1, 0)
+
+    local eyeR = Instance.new("Frame")
+    eyeR.Name = "EyeR"
+    eyeR.Size = UDim2.new(0, 8, 0, 8)
+    eyeR.Position = UDim2.new(0, 24, 0, 12)
+    eyeR.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    eyeR.BorderSizePixel = 0
+    eyeR.Parent = robotBody
+    Instance.new("UICorner", eyeR).CornerRadius = UDim.new(1, 0)
+
+    -- Robot mouth
+    local mouth = Instance.new("Frame")
+    mouth.Name = "Mouth"
+    mouth.Size = UDim2.new(0, 16, 0, 3)
+    mouth.Position = UDim2.new(0, 12, 0, 28)
+    mouth.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    mouth.BorderSizePixel = 0
+    mouth.Parent = robotBody
+
+    -- Robot arm (for thumbs up)
+    local arm = Instance.new("Frame")
+    arm.Name = "Arm"
+    arm.Size = UDim2.new(0, 6, 0, 20)
+    arm.Position = UDim2.new(1, 2, 0, 15)
+    arm.BackgroundColor3 = Color3.fromRGB(0, 120, 220)
+    arm.BorderSizePixel = 0
+    arm.Parent = robotBody
+    Instance.new("UICorner", arm).CornerRadius = UDim.new(0, 3)
+
+    RobotAnim.Body = robotBody
+    RobotAnim.Eyes = {eyeL, eyeR}
+    RobotAnim.Arm = arm
+
+    -- Robot status text
+    local robotStatus = Instance.new("TextLabel")
+    robotStatus.Name = "RobotStatus"
+    robotStatus.Size = UDim2.new(1, -80, 0, 60)
+    robotStatus.Position = UDim2.new(0, 70, 0, 10)
+    robotStatus.BackgroundTransparency = 1
+    robotStatus.Text = "SENTINEL ONLINE\nAwaiting combat data..."
+    robotStatus.TextColor3 = AccentColor
+    robotStatus.TextSize = 11
+    robotStatus.Font = Enum.Font.Gotham
+    robotStatus.TextXAlignment = Enum.TextXAlignment.Left
+    robotStatus.TextYAlignment = Enum.TextYAlignment.Top
+    robotStatus.TextWrapped = true
+    robotStatus.Parent = robotArea
+    ChatSystem.StatusLabel = robotStatus
+
+    -- Chat scroll area
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Name = "ChatScroll"
+    scrollFrame.Size = UDim2.new(1, -10, 1, -155)
+    scrollFrame.Position = UDim2.new(0, 5, 0, 118)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.ScrollBarThickness = 4
+    scrollFrame.ScrollBarImageColor3 = AccentColor
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scrollFrame.Parent = mainFrame
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, 4)
+    listLayout.Parent = scrollFrame
+
+    ChatSystem.ScrollFrame = scrollFrame
+
+    -- Input area
+    local inputArea = Instance.new("Frame")
+    inputArea.Name = "InputArea"
+    inputArea.Size = UDim2.new(1, -10, 0, 32)
+    inputArea.Position = UDim2.new(0, 5, 1, -38)
+    inputArea.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
+    inputArea.BorderSizePixel = 0
+    inputArea.Parent = mainFrame
+    Instance.new("UICorner", inputArea).CornerRadius = UDim.new(0, 8)
+
+    local inputBox = Instance.new("TextBox")
+    inputBox.Name = "ChatInput"
+    inputBox.Size = UDim2.new(1, -45, 1, -4)
+    inputBox.Position = UDim2.new(0, 5, 0, 2)
+    inputBox.BackgroundTransparency = 1
+    inputBox.PlaceholderText = "Type a message..."
+    inputBox.PlaceholderColor3 = SubTextColor
+    inputBox.Text = ""
+    inputBox.TextColor3 = TextColor
+    inputBox.TextSize = 12
+    inputBox.Font = Enum.Font.Gotham
+    inputBox.TextXAlignment = Enum.TextXAlignment.Left
+    inputBox.ClearTextOnFocus = true
+    inputBox.Parent = inputArea
+
+    local sendBtn = Instance.new("TextButton")
+    sendBtn.Name = "SendBtn"
+    sendBtn.Size = UDim2.new(0, 32, 0, 24)
+    sendBtn.Position = UDim2.new(1, -37, 0.5, -12)
+    sendBtn.BackgroundColor3 = AccentColor
+    sendBtn.Text = "▶"
+    sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    sendBtn.TextSize = 12
+    sendBtn.Font = Enum.Font.GothamBold
+    sendBtn.BorderSizePixel = 0
+    sendBtn.Parent = inputArea
+    Instance.new("UICorner", sendBtn).CornerRadius = UDim.new(0, 6)
+
+    ChatSystem.InputBox = inputBox
+    ChatSystem.SendButton = sendBtn
+
+    -- Drag functionality
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            ChatSystem.Dragging = true
+            ChatSystem.DragStart = input.Position
+            ChatSystem.StartPos = mainFrame.Position
+        end
+    end)
+
+    titleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            ChatSystem.Dragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if ChatSystem.Dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - ChatSystem.DragStart
+            mainFrame.Position = UDim2.new(
+                ChatSystem.StartPos.X.Scale, ChatSystem.StartPos.X.Offset + delta.X,
+                ChatSystem.StartPos.Y.Scale, ChatSystem.StartPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    -- Minimize toggle
+    minBtn.MouseButton1Click:Connect(function()
+        if mainFrame.Size == UDim2.new(0, 380, 0, 460) then
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+                Size = UDim2.new(0, 380, 0, 36)
+            }):Play()
+            minBtn.Text = "+"
+        else
+            TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+                Size = UDim2.new(0, 380, 0, 460)
+            }):Play()
+            minBtn.Text = "—"
+        end
+    end)
+
+    -- Send message handler
+    local function handleSend()
+        local text = inputBox.Text
+        if text == "" then return end
+        inputBox.Text = ""
+        Chat_AddMessage("USER", text)
+
+        if ChatSystem.AwaitingReply and ChatSystem.ReplyCallback then
+            ChatSystem.AwaitingReply = false
+            local cb = ChatSystem.ReplyCallback
+            ChatSystem.ReplyCallback = nil
+            cb(text)
+        else
+            AI_ProcessUserMessage(text)
+        end
+    end
+
+    sendBtn.MouseButton1Click:Connect(handleSend)
+    inputBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then handleSend() end
+    end)
+
+    ChatSystem.IsOpen = true
+end
+
+-- Add a message to the chat
+function Chat_AddMessage(sender, text, color)
+    if not ChatSystem.ScrollFrame then return end
+
+    ChatSystem.MessageCount = ChatSystem.MessageCount + 1
+    local msgFrame = Instance.new("Frame")
+    msgFrame.Name = "Msg_" .. ChatSystem.MessageCount
+    msgFrame.Size = UDim2.new(1, -8, 0, 0)
+    msgFrame.AutomaticSize = Enum.AutomaticSize.Y
+    msgFrame.BackgroundTransparency = 1
+    msgFrame.LayoutOrder = ChatSystem.MessageCount
+    msgFrame.Parent = ChatSystem.ScrollFrame
+
+    local msgLabel = Instance.new("TextLabel")
+    msgLabel.Size = UDim2.new(1, -8, 0, 0)
+    msgLabel.Position = UDim2.new(0, 4, 0, 0)
+    msgLabel.AutomaticSize = Enum.AutomaticSize.Y
+    msgLabel.BackgroundTransparency = 1
+    msgLabel.TextWrapped = true
+    msgLabel.TextSize = 11
+    msgLabel.Font = Enum.Font.Gotham
+    msgLabel.TextXAlignment = Enum.TextXAlignment.Left
+    msgLabel.TextYAlignment = Enum.TextYAlignment.Top
+    msgLabel.Parent = msgFrame
+
+    local prefix = ""
+    local textColor = color or TextColor
+
+    if sender == "AI" then
+        prefix = "[SENTINEL] "
+        textColor = color or AccentColor
+    elseif sender == "USER" then
+        prefix = "[YOU] "
+        textColor = color or Color3.fromRGB(255, 255, 100)
+    elseif sender == "SYSTEM" then
+        prefix = "[SYSTEM] "
+        textColor = color or Color3.fromRGB(255, 80, 80)
+    end
+
+    msgLabel.Text = prefix .. text
+    msgLabel.TextColor3 = textColor
+
+    -- Auto scroll to bottom
+    task.defer(function()
+        if ChatSystem.ScrollFrame then
+            ChatSystem.ScrollFrame.CanvasPosition = Vector2.new(0, ChatSystem.ScrollFrame.AbsoluteCanvasSize.Y)
+        end
+    end)
+end
+
+-- Robot animation sequences
+local function Robot_SetState(state)
+    RobotAnim.State = state
+    if not ChatSystem.StatusLabel then return end
+
+    if state == "READING" then
+        ChatSystem.StatusLabel.Text = "ANALYZING KILL REPORT...\nScanning threat patterns..."
+        task.spawn(function()
+            for i = 1, 3 do
+                if RobotAnim.Eyes then
+                    for _, eye in ipairs(RobotAnim.Eyes) do
+                        TweenService:Create(eye, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(255, 200, 0)}):Play()
+                    end
+                    task.wait(0.2)
+                    for _, eye in ipairs(RobotAnim.Eyes) do
+                        TweenService:Create(eye, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+                    end
+                    task.wait(0.2)
+                end
+            end
+        end)
+
+    elseif state == "THINKING" then
+        ChatSystem.StatusLabel.Text = "FORMULATING COUNTER-STRATEGY...\nCross-referencing threat database..."
+        if RobotAnim.Eyes then
+            for _, eye in ipairs(RobotAnim.Eyes) do
+                TweenService:Create(eye, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+                }):Play()
+            end
+        end
+
+    elseif state == "THUMBSUP" then
+        ChatSystem.StatusLabel.Text = "ANALYSIS COMPLETE ✓\nStrategy ready. Opening chat..."
+        if RobotAnim.Arm then
+            TweenService:Create(RobotAnim.Arm, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Position = UDim2.new(1, 2, 0, -5),
+                Rotation = -30,
+            }):Play()
+        end
+        if RobotAnim.Eyes then
+            for _, eye in ipairs(RobotAnim.Eyes) do
+                TweenService:Create(eye, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(0, 255, 100)}):Play()
+            end
+        end
+
+    elseif state == "TALKING" then
+        ChatSystem.StatusLabel.Text = "SENTINEL ONLINE\nReady for your commands."
+        if RobotAnim.Eyes then
+            for _, eye in ipairs(RobotAnim.Eyes) do
+                TweenService:Create(eye, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+            end
+        end
+        if RobotAnim.Arm then
+            TweenService:Create(RobotAnim.Arm, TweenInfo.new(0.3), {
+                Position = UDim2.new(1, 2, 0, 15),
+                Rotation = 0,
+            }):Play()
+        end
+
+    elseif state == "IDLE" then
+        ChatSystem.StatusLabel.Text = "SENTINEL ONLINE\nAwaiting combat data..."
+    end
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 16: SENTINEL AI – KILL ANALYSIS PIPELINE                  ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function AI_OnKillDetected(killData)
+    -- Step 1: Robot starts reading
+    Robot_SetState("READING")
+
+    task.spawn(function()
+        task.wait(1.5) -- Reading animation duration
+
+        -- Step 2: Robot thinks
+        Robot_SetState("THINKING")
+        task.wait(1.0) -- Thinking animation duration
+
+        -- Step 3: Update threat profile
+        local profile = AI_UpdateProfile(killData.Killer, killData)
+
+        -- Step 4: Formulate strategy
+        local strategy = AI_FormulateStrategy(profile, killData)
+
+        -- Step 5: Thumbs up
+        Robot_SetState("THUMBSUP")
+        task.wait(1.0)
+
+        -- Step 6: Open chat and present
+        Robot_SetState("TALKING")
+        Chat_CreateGUI()
+
+        -- Present the analysis
+        Chat_AddMessage("SYSTEM", "═══ KILL REPORT ═══", Color3.fromRGB(255, 50, 50))
+        Chat_AddMessage("AI", "Killer: " .. killData.Killer)
+        Chat_AddMessage("AI", "Weapon: " .. killData.Weapon)
+        Chat_AddMessage("AI", "Distance: " .. killData.Distance .. " studs")
+        Chat_AddMessage("AI", "Time-to-Kill: " .. string.format("%.2f", killData.TTK) .. " seconds")
+        Chat_AddMessage("AI", "Threat Level: " .. killData.Threat .. "/10")
+        Chat_AddMessage("AI", "")
+
+        -- Explain WHY you're losing
+        Chat_AddMessage("SYSTEM", "═══ WHY YOU'RE LOSING ═══", Color3.fromRGB(255, 200, 0))
+        for _, explanation in ipairs(strategy.Explanations) do
+            Chat_AddMessage("AI", explanation)
+        end
+
+        -- Show suspected features
+        if #profile.SuspectedFeatures > 0 then
+            Chat_AddMessage("AI", "")
+            Chat_AddMessage("AI", "Detected opponent features: " .. table.concat(profile.SuspectedFeatures, ", "))
+            Chat_AddMessage("AI", "Profile confidence: " .. profile.ThreatScore .. "/100")
+            Chat_AddMessage("AI", "Total kills by this player: " .. profile.TotalKills)
+        end
+
+        Chat_AddMessage("AI", "")
+        Chat_AddMessage("SYSTEM", "═══ PROPOSED COUNTER-STRATEGY ═══", Color3.fromRGB(0, 255, 100))
+        Chat_AddMessage("AI", "Priority: " .. strategy.Priority)
+        Chat_AddMessage("AI", "Confidence: " .. strategy.Confidence .. "%")
+        Chat_AddMessage("AI", "Actions (" .. #strategy.Actions .. "):")
+
+        for i, action in ipairs(strategy.Actions) do
+            local desc = ""
+            if action.type == "enable" then
+                desc = "  " .. i .. ". ENABLE " .. action.feature
+            elseif action.type == "set" then
+                desc = "  " .. i .. ". SET " .. action.feature .. " = " .. tostring(action.value)
+            end
+            if action.reason then
+                desc = desc .. " (" .. action.reason .. ")"
+            end
+            Chat_AddMessage("AI", desc, Color3.fromRGB(150, 255, 150))
+        end
+
+        -- Ask for confirmation
+        Chat_AddMessage("AI", "")
+        Chat_AddMessage("AI", "Do you approve this strategy? Type Y to execute, N to cancel, or ask me a question.", Color3.fromRGB(255, 255, 0))
+
+        AI_State.Current = "AWAITING_CONFIRM"
+        AI_State.PendingStrategy = strategy
+        ChatSystem.AwaitingReply = true
+        ChatSystem.ReplyCallback = function(reply)
+            local lower = reply:lower():gsub("%s+", "")
+            if lower == "y" or lower == "yes" or lower == "confirm" or lower == "approve" or lower == "doit" then
+                Chat_AddMessage("AI", "Strategy approved. Executing counter-measures now.", Color3.fromRGB(0, 255, 100))
+                AI_ExecuteStrategy(strategy)
+                AI_State.Current = "IDLE"
+
+                -- Confirm execution
+                task.wait(0.5)
+                Chat_AddMessage("AI", "All " .. #strategy.Actions .. " actions executed successfully.")
+                Chat_AddMessage("AI", "I'll continue monitoring. If they kill you again, I'll adapt the strategy.")
+                Robot_SetState("IDLE")
+
+            elseif lower == "n" or lower == "no" or lower == "cancel" or lower == "deny" then
+                Chat_AddMessage("AI", "Strategy cancelled. I'll keep monitoring. Let me know if you want me to suggest something else.", Color3.fromRGB(255, 200, 0))
+                AI_State.Current = "IDLE"
+                Robot_SetState("IDLE")
+
+            else
+                -- They asked a question or gave other input
+                AI_ProcessUserMessage(reply)
+                -- Re-ask for confirmation after answering
+                task.wait(0.3)
+                Chat_AddMessage("AI", "Still waiting for your decision. Type Y to approve or N to cancel.", Color3.fromRGB(255, 255, 0))
+                ChatSystem.AwaitingReply = true
+                ChatSystem.ReplyCallback = function(reply2)
+                    local l2 = reply2:lower():gsub("%s+", "")
+                    if l2 == "y" or l2 == "yes" or l2 == "confirm" then
+                        Chat_AddMessage("AI", "Executing now.", Color3.fromRGB(0, 255, 100))
+                        AI_ExecuteStrategy(strategy)
+                        AI_State.Current = "IDLE"
+                    else
+                        Chat_AddMessage("AI", "Cancelled.", Color3.fromRGB(255, 200, 0))
+                        AI_State.Current = "IDLE"
+                    end
+                    Robot_SetState("IDLE")
+                end
+            end
+        end
+    end)
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 17: SENTINEL AI – USER MESSAGE PROCESSOR                  ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+function AI_ProcessUserMessage(text)
+    local lower = text:lower()
+
+    -- Help command
+    if lower:find("help") or lower:find("commands") then
+        Chat_AddMessage("AI", "Available commands:")
+        Chat_AddMessage("AI", "  'status' - Current threat status")
+        Chat_AddMessage("AI", "  'profiles' - View all threat profiles")
+        Chat_AddMessage("AI", "  'profile [name]' - View specific player profile")
         Chat_AddMessage("AI", "  'strategy' - View active strategy")
         Chat_AddMessage("AI", "  'threats' - Current threat assessment")
         Chat_AddMessage("AI", "  'disable all' - Turn off all AI-activated features")
@@ -509,7 +1233,7 @@ local function applyReach()
                 if not reachHL[part] then
                     local hl = Instance.new("Highlight", part)
                     hl.FillTransparency = 1
-                    hl.OutlineColor = Color3.fromRGB(0, 150, 255)
+                    hl.OutlineColor = AccentColor
                     reachHL[part] = hl
                 end
             end
@@ -684,1024 +1408,3 @@ end
 local function stopInstaKill()
     if InstaKillConn then InstaKillConn:Disconnect(); InstaKillConn = nil end
 end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 25: 1000x HIT AMPLIFIER (360 SWEEP + MULTI-PULSE)        ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local HA_OverlapParams = OverlapParams.new()
-HA_OverlapParams.FilterType = Enum.RaycastFilterType.Exclude
-
-local function HA_RefreshTools()
-    table.clear(HA_CachedTools)
-    local char = player.Character
-    if not char then return end
-    for _, t in ipairs(char:GetChildren()) do
-        if t:IsA("Tool") then
-            local fight = t:FindFirstChild("FightEvent", true)
-            if fight and fight:IsA("RemoteEvent") then
-                table.insert(HA_CachedTools, {Tool = t, FightEvent = fight})
-            end
-        end
-    end
-end
-
-local function startHitAmplifier()
-    if HitAmpConn then HitAmpConn:Disconnect() end
-    HA_RefreshTools()
-    HitAmpConn = RunService.PreSimulation:Connect(function(dt)
-        if not HitAmpEnabled then return end
-        HA_Accumulator = HA_Accumulator + dt
-        if HA_Accumulator < HA_PulseInterval then return end
-        HA_Accumulator = 0
-        local char = player.Character
-        if not char then return end
-        local hrp = getHRP(char)
-        if not hrp then return end
-        local now = os.clock()
-        if now - HA_LastActivation < 0.006 then return end  -- 1000x: faster
-
-        HA_OverlapParams.FilterDescendantsInstances = {char}
-
-        -- 360 SPHERICAL SCAN
-        local parts = workspace:GetPartBoundsInBox(
-            CFrame.new(hrp.Position),
-            HA_Range,
-            HA_OverlapParams
-        )
-
-        -- Also do a sphere check for anything the box misses
-        local sphereParts = workspace:GetPartBoundsInRadius(hrp.Position, HA_Range.X, HA_OverlapParams)
-
-        local hasTarget = false
-        local targetModels = {}
-
-        for _, part in ipairs(parts) do
-            local model = part:FindFirstChildOfClass("Model")
-                or (part.Parent and part.Parent:FindFirstChildOfClass("Model"))
-            if model then
-                local hum = model:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 and model ~= char then
-                    hasTarget = true
-                    if not targetModels[model] then
-                        targetModels[model] = true
-                    end
-                end
-            end
-        end
-        for _, part in ipairs(sphereParts) do
-            local model = part:FindFirstChildOfClass("Model")
-                or (part.Parent and part.Parent:FindFirstChildOfClass("Model"))
-            if model then
-                local hum = model:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 and model ~= char then
-                    hasTarget = true
-                    if not targetModels[model] then
-                        targetModels[model] = true
-                    end
-                end
-            end
-        end
-
-        if hasTarget then
-            HA_LastActivation = now
-            -- MULTI-PULSE: Fire multiple waves
-            local pulses = HA_MultiPulse and 3 or 1
-            for _ = 1, pulses do
-                for _, data in ipairs(HA_CachedTools) do
-                    if data.FightEvent then
-                        pcall(function()
-                            for _ = 1, HA_BurstCount do data.FightEvent:FireServer() end
-                        end)
-                    else
-                        pcall(data.Tool.Activate, data.Tool)
-                    end
-                end
-            end
-        end
-    end)
-end
-
-local function stopHitAmplifier()
-    if HitAmpConn then HitAmpConn:Disconnect(); HitAmpConn = nil end
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 26: 1000x TOOL GRABBER                                   ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local TG_TOOL_RULES = {
-    {Pattern = "Energy Sword", Base = "Stone"},
-    {Pattern = "Staff", Base = "Magic"},
-    {Pattern = "Axe", Base = "Storm"},
-    {Pattern = "Fist", Base = "Robotic"},
-    {Pattern = "Blade Arms", Base = "Mecha"},
-    {Pattern = "Shadow Claws", Base = "Shadow"},
-    {Pattern = "Hyper Claws", Base = "Hyper"},
-    {Pattern = "Thunder Claws", Base = "Thunder"},
-    {Pattern = "Void Claws", Base = "Void"},
-    {Pattern = "Frozen Claws", Base = "Frozen"},
-    {Pattern = "Magma Claws", Base = "Magma"},
-    {Pattern = "Nuclear Claws", Base = "Nuclear"},
-    {Pattern = "Toxic Claws", Base = "Toxic"},
-    {Pattern = "Punch", Base = "Kong"},
-}
-
-local function TG_HasTool(pattern)
-    local bp = player:FindFirstChildOfClass("Backpack")
-    if bp then
-        for _, item in ipairs(bp:GetChildren()) do
-            if item:IsA("Tool") and item.Name:lower():find(pattern:lower(), 1, true) then return true end
-        end
-    end
-    local char = player.Character
-    if char then
-        for _, item in ipairs(char:GetChildren()) do
-            if item:IsA("Tool") and item.Name:lower():find(pattern:lower(), 1, true) then return true end
-        end
-    end
-    return false
-end
-
-local function TG_GetClosestPad(baseName)
-    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return nil end
-    local pads = TG_padsByBase[baseName]
-    if not pads or #pads == 0 then return nil end
-    local closest, bestDist = nil, 10000
-    for _, pad in ipairs(pads) do
-        if pad and pad.Parent then
-            local d = (pad.Position - root.Position).Magnitude
-            if d < bestDist then bestDist = d; closest = pad end
-        end
-    end
-    return closest
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 27: 1000x KILL INTELLIGENCE (FULL BEHAVIORAL ANALYSIS)   ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local LastSpawnTime = 0
-
-local function analyzeKill(killer, weaponName, distance, ttk)
-    local suspected = {}
-    local counter = {}
-    local threat = 1
-    local timeSinceRespawn = tick() - LastSpawnTime
-
-    -- LOOPBRING detection
-    if ttk < 0.3 and distance < 8 then
-        table.insert(suspected, "LoopBring")
-        table.insert(counter, "FastRespawn + AntiSpawnkill + GodMode + Phase")
-        threat = threat + 4
-    end
-
-    -- KILL AURA detection
-    if distance > 5 and distance < 15 and ttk < 0.5 then
-        table.insert(suspected, "KillAura")
-        table.insert(counter, "Anti-Aura + Repel + Phase")
-        threat = threat + 3
-    end
-
-    -- REACH detection
-    if distance > 25 then
-        table.insert(suspected, "Reach")
-        table.insert(counter, "Match Reach + Phase")
-        threat = threat + 3
-    end
-    if distance > 40 then
-        table.insert(suspected, "Extreme Reach / LoopBring")
-        threat = threat + 2
-    end
-
-    -- FAST KILL detection
-    if ttk < 0.2 then
-        table.insert(suspected, "FastKill / RemoteSpam")
-        table.insert(counter, "GodMode + HealAura")
-        threat = threat + 3
-    end
-
-    -- FIGHT EVENT ABUSE
-    if weaponName == "Unknown" and ttk < 0.5 then
-        table.insert(suspected, "FightEvent Abuse")
-        table.insert(counter, "ForceField GodMode")
-        threat = threat + 3
-    end
-
-    -- HIT AMPLIFIER
-    if distance > 15 and distance <= 30 and ttk < 0.8 then
-        table.insert(suspected, "HitAmplifier")
-        table.insert(counter, "Phase + Repel")
-        threat = threat + 2
-    end
-
-    -- TOOL FOLLOW
-    if distance < 3 then
-        table.insert(suspected, "ToolFollow / Close Combat")
-        table.insert(counter, "Repel + Phase")
-        threat = threat + 1
-    end
-
-    -- SPAWN KILL
-    if timeSinceRespawn < 2 then
-        table.insert(suspected, "SpawnKill")
-        table.insert(counter, "AntiSpawnkill + GodMode")
-        threat = threat + 3
-    end
-
-    threat = math.clamp(threat, 1, 10)
-    if threat >= 10 then
-        table.insert(counter, "CRITICAL: FULL DEFENSE MATRIX NOW")
-    end
-    if threat >= 7 then
-        table.insert(counter, "Enable full Defense Matrix")
-    end
-
-    return {
-        Killer = killer,
-        Weapon = weaponName,
-        Distance = math.floor(distance),
-        TTK = ttk,
-        TimeSinceRespawn = timeSinceRespawn,
-        Suspected = suspected,
-        Counter = counter,
-        Threat = threat,
-        Time = os.date("%H:%M:%S"),
-        DeathCount = DeathCount
-    }
-end
-
-local function setupKillNotifications()
-    player.CharacterAdded:Connect(function(char)
-        LastSpawnTime = tick()
-        local hum = char:WaitForChild("Humanoid")
-        hum.Died:Connect(function()
-            DeathCount = DeathCount + 1
-            KillStreak = 0
-            local deathTime = tick()
-            table.insert(DeathTimestamps, deathTime)
-            if #DeathTimestamps > 20 then table.remove(DeathTimestamps, 1) end
-
-            if not KillNotifEnabled then return end
-
-            local creator = hum:FindFirstChild("creator")
-            local killerName, weaponName, distance, ttk = "Unknown", "Unknown", 0, 999
-
-            if creator and creator.Value then
-                killerName = creator.Value.Name
-                local killerChar = creator.Value.Character
-                if killerChar then
-                    local myRoot = char:FindFirstChild("HumanoidRootPart")
-                    local theirRoot = killerChar:FindFirstChild("HumanoidRootPart")
-                    if myRoot and theirRoot then
-                        distance = (myRoot.Position - theirRoot.Position).Magnitude
-                    end
-                    for _, tool in ipairs(killerChar:GetChildren()) do
-                        if tool:IsA("Tool") then weaponName = tool.Name; break end
-                    end
-                end
-            end
-
-            -- Calculate TTK from last damage timestamp
-            if #DeathTimestamps >= 2 then
-                ttk = DeathTimestamps[#DeathTimestamps] - DeathTimestamps[#DeathTimestamps - 1]
-            end
-            if ttk > 10 then ttk = 1 end -- cap unreasonable values
-
-            local analysis = analyzeKill(killerName, weaponName, distance, ttk)
-
-            -- Store in kill logs
-            table.insert(KillLogs, analysis)
-            if #KillLogs > 100 then table.remove(KillLogs, 1) end
-            if KillLogEnabled then appendLog(analysis) end
-
-            -- ═══ TRIGGER SENTINEL AI PIPELINE ═══
-            AI_OnKillDetected(analysis)
-
-            -- Also send a WindUI notification
-            WindUI:Notify({
-                Title = "SENTINEL AI - Kill Detected (Threat " .. analysis.Threat .. "/10)",
-                Content = "Killer: " .. analysis.Killer
-                    .. "\nWeapon: " .. analysis.Weapon
-                    .. "\nDist: " .. analysis.Distance .. " studs | TTK: " .. string.format("%.2f", analysis.TTK) .. "s"
-                    .. "\nSuspected: " .. table.concat(analysis.Suspected, ", ")
-                    .. "\nAI analyzing... check chat.",
-                Duration = 6,
-                Icon = "alert-triangle",
-            })
-        end)
-    end)
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 28: 1000x ESP (THREAT-COLORED + INFO)                    ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local function startESP()
-    if espGui then return end
-    espGui = Instance.new("ScreenGui")
-    espGui.Name = "EXO_ESP"
-    espGui.ResetOnSpawn = false
-    pcall(function() espGui.Parent = CoreGui end)
-    if not espGui.Parent then espGui.Parent = player:WaitForChild("PlayerGui") end
-
-    local function createDot(plr)
-        local container = Instance.new("Frame")
-        container.Size = UDim2.new(0, 60, 0, 20)
-        container.BackgroundTransparency = 1
-        container.Parent = espGui
-
-        local dot = Instance.new("Frame")
-        dot.Size = UDim2.new(0, 8, 0, 8)
-        dot.Position = UDim2.new(0.5, -4, 0, 0)
-        dot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-        dot.BorderSizePixel = 0
-        dot.Parent = container
-        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, 0, 0, 10)
-        nameLabel.Position = UDim2.new(0, 0, 0, 10)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Text = plr.Name
-        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        nameLabel.TextSize = 8
-        nameLabel.Font = Enum.Font.Gotham
-        nameLabel.Parent = container
-
-        espDots[plr] = container
-    end
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then createDot(plr) end
-    end
-
-    Players.PlayerAdded:Connect(function(plr)
-        if plr ~= player then createDot(plr) end
-    end)
-
-    Players.PlayerRemoving:Connect(function(plr)
-        if espDots[plr] then espDots[plr]:Destroy(); espDots[plr] = nil end
-    end)
-
-    RunService.RenderStepped:Connect(function()
-        if not ESPEnabled then return end
-        local cam = workspace.CurrentCamera
-        if not cam then return end
-        local myChar = player.Character
-        local myPos = myChar and myChar:FindFirstChild("HumanoidRootPart") and myChar.HumanoidRootPart.Position
-
-        for plr, container in pairs(espDots) do
-            local char = plr.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                local pos, onScreen = cam:WorldToViewportPoint(char.HumanoidRootPart.Position)
-                container.Position = UDim2.new(0, pos.X - 30, 0, pos.Y - 10)
-                container.Visible = onScreen
-
-                -- Threat coloring based on distance
-                if myPos then
-                    local dist = (char.HumanoidRootPart.Position - myPos).Magnitude
-                    local dot = container:FindFirstChild("Frame")
-                    if dot then
-                        if dist < 15 then
-                            dot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-                        elseif dist < 30 then
-                            dot.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
-                        else
-                            dot.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
-                        end
-                    end
-                end
-            else
-                container.Visible = false
-            end
-        end
-    end)
-end
-
-local function stopESP()
-    if espGui then espGui:Destroy(); espGui = nil end
-    table.clear(espDots)
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 29: 1000x ANTI-LAG                                       ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local function startAntiLag()
-    pcall(function()
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail") then
-                obj.Enabled = false
-            end
-            if obj:IsA("Sound") and obj.Playing then
-                obj.Volume = 0
-            end
-        end
-        Lighting.GlobalShadows = false
-        Lighting.Brightness = 1
-        Lighting.FogEnd = 500
-        for _, effect in ipairs(Lighting:GetChildren()) do
-            if effect:IsA("PostEffect") then effect.Enabled = false end
-        end
-    end)
-    pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
-end
-
-local function stopAntiLag()
-    pcall(function()
-        Lighting.GlobalShadows = true
-        Lighting.Brightness = 2
-        Lighting.FogEnd = 100000
-        for _, effect in ipairs(Lighting:GetChildren()) do
-            if effect:IsA("PostEffect") then effect.Enabled = true end
-        end
-    end)
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 30: SAFE NO COOLDOWN                                     ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local function startNoCooldown()
-    if NoCooldownConn then NoCooldownConn:Disconnect() end
-    NoCooldownConn = RunService.RenderStepped:Connect(function()
-        if not NoCooldown then return end
-        local myChar = player.Character
-        if not myChar then return end
-        for _, t in ipairs(myChar:GetChildren()) do
-            if t:IsA("Tool") then
-                pcall(function()
-                    if t:FindFirstChild("Cooldown") then t.Cooldown.Value = 0 end
-                    if t:FindFirstChild("Enabled") then t.Enabled.Value = true end
-                    local handle = t:FindFirstChild("Handle")
-                    if handle and handle:IsA("BasePart") then handle.CanCollide = false end
-                end)
-            end
-        end
-    end)
-end
-
-local function stopNoCooldown()
-    if NoCooldownConn then NoCooldownConn:Disconnect(); NoCooldownConn = nil end
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 31: BUILD WINDUI                                         ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local Window = WindUI:CreateWindow({
-    Title = "EXO Hub",
-    Icon = "swords",
-    Author = "SENTINEL AI | v8.0 | 1000x",
-    Folder = "EXOHub",
-    Size = UDim2.fromOffset(680, 540),
-    Transparent = false,
-    Theme = "Default",
-    SideBarWidth = 180,
-    HasOutline = true,
-})
-
-Window:EditOpenButton({
-    Enabled = true,
-    Image = "swords",
-    Title = "E",
-    CornerRadius = UDim.new(1, 0),
-    StrokeThickness = 2,
-    Side = "Left",
-})
-
-local SPT_Combat_Tab   = Window:Tab({Title = "SPT Combat", Icon = "swords"})
-local SPT_Tycoon_Tab   = Window:Tab({Title = "SPT Tycoon", Icon = "building-2"})
-local SPT_Misc_Tab     = Window:Tab({Title = "SPT Misc", Icon = "move"})
-local MPT_Kill_Tab     = Window:Tab({Title = "MPT Kill", Icon = "skull"})
-local MPT_Economy_Tab  = Window:Tab({Title = "MPT Economy", Icon = "crown"})
-local AI_Tab           = Window:Tab({Title = "Sentinel AI", Icon = "brain"})
-local Updates_Tab      = Window:Tab({Title = "Updates", Icon = "scroll-text"})
-local Settings_Tab     = Window:Tab({Title = "Settings", Icon = "settings"})
-
--- ═══════════════════════════════════════════════════════════════════════
---  SPT COMBAT TAB (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local AuraSec = SPT_Combat_Tab:Section({Title = "1000x Multi-Target Aura"})
-    AuraSec:Toggle({Title = "Enable Aura", Default = false, Callback = function(state)
-        Aura.Enabled = state
-        if state then
-            Aura.TargetList = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(Aura.TargetList, plr) end
-            end
-            startAuraLoop()
-            WindUI:Notify({Title = "Aura", Content = "ENGAGED - " .. #Aura.TargetList .. " targets. Multi-vector prediction active.", Duration = 2, Icon = "swords"})
-        else stopAuraLoop() end
-    end})
-    AuraSec:Toggle({Title = "Instant Kill", Default = false, Callback = function(state) InstantKill = state end})
-    AuraSec:Slider({Title = "Prediction Depth", Min = 3, Max = 30, Default = 8, Callback = function(val) latencyEstimate = val / 100 end})
-    AuraSec:Dropdown({Title = "Aura Targets", Options = getServerPlayers(), MultiSelection = true, Callback = function(selected)
-        table.clear(Aura.TargetList)
-        if selected then
-            for _, name in ipairs(selected) do
-                local plr = Players:FindFirstChild(name)
-                if plr then table.insert(Aura.TargetList, plr) end
-            end
-        end
-    end})
-
-    local ToolFollowSec = SPT_Combat_Tab:Section({Title = "1000x Tool Follow"})
-    ToolFollowSec:Toggle({Title = "Enable Tool Follow", Default = false, Callback = function(state)
-        ToolFollow.Enabled = state
-        if state then
-            ToolFollow.Targets = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(ToolFollow.Targets, plr) end
-            end
-            startToolFollow()
-        else stopToolFollow() end
-    end})
-
-    local DefenseSec = SPT_Combat_Tab:Section({Title = "1000x Defense / Anti-Aura"})
-    DefenseSec:Toggle({Title = "Enable Anti-Aura", Default = false, Callback = function(state)
-        AntiAura.Enabled = state
-        if state then startAntiAura() else stopAntiAura() end
-    end})
-    DefenseSec:Toggle({Title = "God Mode (ForceField)", Default = false, Callback = function(state) AntiAura.GodMode = state end})
-    DefenseSec:Toggle({Title = "Repel (Anti-Touch)", Default = false, Callback = function(state) AntiAura.Repel = state end})
-    DefenseSec:Toggle({Title = "Phase (No Collide)", Default = false, Callback = function(state) AntiAura.Phase = state end})
-    DefenseSec:Toggle({Title = "Heal Aura", Default = false, Callback = function(state) AntiAura.HealAura = state end})
-    DefenseSec:Slider({Title = "Repel Force", Min = 50, Max = 300, Default = 120, Callback = function(val) AntiAura.RepelForce = val end})
-    DefenseSec:Slider({Title = "Repel Radius", Min = 8, Max = 30, Default = 18, Callback = function(val) AntiAura.RepelRadius = val end})
-    DefenseSec:Toggle({Title = "Anti Spawnkill", Default = false, Callback = function(state)
-        AntiSpawnkill = state
-        if state then
-            player.CharacterAdded:Connect(function(c)
-                local hum = c:WaitForChild("Humanoid")
-                hum.MaxHealth = 9e9; hum.Health = 9e9
-                local ff = Instance.new("ForceField", c); ff.Visible = false
-                task.delay(5, function()
-                    if hum and hum.Parent then hum.MaxHealth = 100; hum.Health = 100 end
-                    if ff then ff:Destroy() end
-                end)
-            end)
-        end
-    end})
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  SPT TYCOON TAB (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local TycoonSec = SPT_Tycoon_Tab:Section({Title = "1000x Tycoon Automation"})
-    TycoonSec:Toggle({Title = "Auto Claim Money", Default = false, Callback = function(state)
-        AutoClaimMoney = state
-        if state then startClaimMoney() else stopClaimMoney() end
-    end})
-    TycoonSec:Toggle({Title = "Smart Auto Build (Multi-Buy)", Default = false, Callback = function(state)
-        AutoBuild = state
-        if state then startAutoBuild() else stopAutoBuild() end
-    end})
-    TycoonSec:Toggle({Title = "Auto Grab Weapons", Default = false, Callback = function(state)
-        AutoGetTools = state
-        if state then
-            if grabLoopConn then grabLoopConn:Disconnect() end
-            grabLoopConn = RunService.PreSimulation:Connect(function()
-                if not AutoGetTools then return end
-                local myChar = player.Character
-                if not myChar then return end
-                local root = myChar:FindFirstChild("HumanoidRootPart")
-                if not root then return end
-                for _, rule in ipairs(TG_TOOL_RULES) do
-                    if not TG_HasTool(rule.Pattern) then
-                        local pad = TG_GetClosestPad(rule.Base)
-                        if pad then
-                            for _ = 1, TG_BurstCount do
-                                pcall(firetouchinterest, root, pad, 0)
-                                pcall(firetouchinterest, root, pad, 1)
-                            end
-                        end
-                    end
-                end
-            end)
-        else
-            if grabLoopConn then grabLoopConn:Disconnect(); grabLoopConn = nil end
-        end
-    end})
-
-    local CooldownSec = SPT_Tycoon_Tab:Section({Title = "Tools & Cooldown"})
-    CooldownSec:Toggle({Title = "Auto Use Tools (0 delay)", Default = false, Callback = function(state)
-        AutoTools = state
-        if state then
-            toolLoopConn = RunService.RenderStepped:Connect(function()
-                if not AutoTools then return end
-                local myChar = player.Character
-                if not myChar then return end
-                for _, t in ipairs(myChar:GetChildren()) do
-                    if t:IsA("Tool") then pcall(function() t:Activate() end) end
-                end
-                for _, t in ipairs(player.Backpack:GetChildren()) do
-                    if t:IsA("Tool") then t.Parent = myChar; pcall(function() t:Activate() end) end
-                end
-            end)
-        else
-            if toolLoopConn then toolLoopConn:Disconnect(); toolLoopConn = nil end
-        end
-    end})
-    CooldownSec:Toggle({Title = "No Cooldown (SAFE)", Default = false, Callback = function(state)
-        NoCooldown = state
-        if state then startNoCooldown() else stopNoCooldown() end
-    end})
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  SPT MISC TAB (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local ReachSec = SPT_Misc_Tab:Section({Title = "1000x Reach"})
-    ReachSec:Toggle({Title = "Enable Reach", Default = false, Callback = function(state)
-        Reach = state
-        if state then applyReach() else stopReach() end
-    end})
-    ReachSec:Slider({Title = "Reach Size", Min = 1, Max = 15, Default = 3, Callback = function(val)
-        ReachSize = val
-        if Reach then stopReach(); applyReach() end
-    end})
-
-    local RespawnSec = SPT_Misc_Tab:Section({Title = "Respawn & Protection"})
-    RespawnSec:Toggle({Title = "Fast Respawn", Default = false, Callback = function(state)
-        FastRespawn = state
-        if state then startFastRespawn() end
-    end})
-
-    local UtilsSec = SPT_Misc_Tab:Section({Title = "Utilities"})
-    UtilsSec:Textbox({Title = "Set Damage Remote", Placeholder = "game.ReplicatedStorage.DealDamage", Callback = function(text)
-        if text and text ~= "" then
-            local ok, remote = pcall(function() return loadstring("return " .. text)() end)
-            if ok and remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
-                DAMAGE_REMOTE = remote
-                WindUI:Notify({Title = "Remote Set", Content = "Damage remote updated.", Duration = 3, Icon = "check"})
-            else
-                WindUI:Notify({Title = "Error", Content = "Invalid remote path.", Duration = 3, Icon = "x"})
-            end
-        end
-    end})
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  MPT KILL TAB (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local OmniSec = MPT_Kill_Tab:Section({Title = "1000x Omni-Kill Engine"})
-    OmniSec:Toggle({Title = "Enable Omni-Kill", Default = false, Callback = function(state)
-        Aura.Enabled = state; InstantKill = state
-        if state then
-            Aura.TargetList = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(Aura.TargetList, plr) end
-            end
-            startAuraLoop()
-            WindUI:Notify({Title = "OMNI-KILL", Content = "ENGAGED - " .. #Aura.TargetList .. " targets.", Duration = 3, Icon = "skull"})
-        else stopAuraLoop() end
-    end})
-    OmniSec:Toggle({Title = "Insta-Kill Micro-Burst", Default = false, Callback = function(state)
-        InstaKillEnabled = state
-        if state then startInstaKill() else stopInstaKill() end
-    end})
-    OmniSec:Toggle({Title = "Adaptive Burst (Threat-Based)", Default = true, Callback = function(state)
-        IK_AdaptiveBurst = state
-    end})
-    OmniSec:Slider({Title = "Prediction Aggression", Min = 3, Max = 30, Default = 8, Callback = function(val) latencyEstimate = val / 100 end})
-    OmniSec:Slider({Title = "Burst Count", Min = 3, Max = 20, Default = 12, Callback = function(val) IK_BurstCount = val end})
-    OmniSec:Button({Title = "Manual Kill Burst", Callback = function()
-        local orig = Aura.Enabled
-        Aura.Enabled = true; InstantKill = true
-        task.wait(0.15)
-        Aura.Enabled = orig
-        if not orig then InstantKill = false end
-        WindUI:Notify({Title = "Kill Burst", Content = "Burst fired.", Duration = 2, Icon = "zap"})
-    end})
-    OmniSec:Button({Title = "Refresh Target List", Callback = function()
-        table.clear(Aura.TargetList)
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player then table.insert(Aura.TargetList, plr) end
-        end
-        WindUI:Notify({Title = "Targets", Content = "Refreshed: " .. #Aura.TargetList .. " players.", Duration = 2, Icon = "refresh-cw"})
-    end})
-
-    local HitAmpSec = MPT_Kill_Tab:Section({Title = "1000x Hit Amplifier"})
-    HitAmpSec:Toggle({Title = "Enable Hit Amplifier", Default = false, Callback = function(state)
-        HitAmpEnabled = state
-        if state then startHitAmplifier() else stopHitAmplifier() end
-    end})
-    HitAmpSec:Slider({Title = "Scan Range", Min = 15, Max = 60, Default = 45, Callback = function(val)
-        HA_Range = Vector3.new(val, val, val)
-    end})
-    HitAmpSec:Slider({Title = "Burst Count", Min = 1, Max = 15, Default = 8, Callback = function(val) HA_BurstCount = val end})
-    HitAmpSec:Toggle({Title = "Multi-Pulse (3x waves)", Default = true, Callback = function(state) HA_MultiPulse = state end})
-    HitAmpSec:Label({Title = "360 sphere+box scan | 8ms cooldown | OverlapParams"})
-
-    local ArsenalSec = MPT_Kill_Tab:Section({Title = "1000x Tool Arsenal"})
-    ArsenalSec:Toggle({Title = "Enable Tool Arsenal", Default = false, Callback = function(state)
-        TG_Enabled = state
-        if state then
-            if not getgenv().EXO_TG_Loop then
-                getgenv().EXO_TG_Loop = true
-                task.spawn(function()
-                    while getgenv().EXO_TG_Loop do
-                        if TG_Enabled then
-                            local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                            if root then
-                                for _, rule in ipairs(TG_TOOL_RULES) do
-                                    if not TG_HasTool(rule.Pattern) then
-                                        local pad = TG_GetClosestPad(rule.Base)
-                                        if pad then
-                                            for _ = 1, TG_BurstCount do
-                                                pcall(firetouchinterest, root, pad, 0)
-                                                pcall(firetouchinterest, root, pad, 1)
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                        task.wait(0.08)
-                    end
-                end)
-            end
-        else
-            getgenv().EXO_TG_Loop = false
-        end
-    end})
-    ArsenalSec:Button({Title = "Force Acquire All", Callback = function()
-        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            for baseName, _ in pairs(TG_padsByBase) do
-                local pad = TG_GetClosestPad(baseName)
-                if pad then
-                    for _ = 1, TG_BurstCount do
-                        pcall(firetouchinterest, root, pad, 0)
-                        pcall(firetouchinterest, root, pad, 1)
-                    end
-                end
-            end
-            WindUI:Notify({Title = "Tool Arsenal", Content = "Force acquire burst fired.", Duration = 2, Icon = "package"})
-        end
-    end})
-    ArsenalSec:Label({Title = "14 Bases: Stone, Magic, Storm, Robotic, Mecha, Shadow, Hyper, Thunder, Void, Frozen, Magma, Nuclear, Toxic, Kong"})
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  MPT ECONOMY TAB (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local SovSec = MPT_Economy_Tab:Section({Title = "1000x Tycoon Sovereign"})
-    SovSec:Toggle({Title = "Enable Sovereign Economy", Default = false, Callback = function(state)
-        AutoClaimMoney = state; AutoBuild = state
-        if state then startClaimMoney(); startAutoBuild()
-        else stopClaimMoney(); stopAutoBuild() end
-    end})
-    SovSec:Slider({Title = "Defense Threat Radius", Min = 20, Max = 120, Default = 60, Callback = function(val) ThreatRadius = val end})
-    SovSec:Button({Title = "Force Buy Next Upgrade", Callback = function()
-        local myChar = player.Character
-        if not myChar then return end
-        local root = myChar:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local tycoonType = getPlayerTycoonType()
-        if not tycoonType then return end
-        local tycoonFolder = workspace:FindFirstChild("Tycoons") and workspace.Tycoons:FindFirstChild(tycoonType)
-        if not tycoonFolder then return end
-        local cash = getPlayerCash()
-        local best, bestPri = nil, 9999
-        for _, obj in ipairs(tycoonFolder:GetDescendants()) do
-            if obj:IsA("Model") then
-                local cost = getCost(obj)
-                local pri = getPriority(obj.Name)
-                if cost > 0 and cost <= cash and pri < bestPri then best = obj; bestPri = pri end
-            end
-        end
-        if best then
-            for _, part in ipairs(getTouchableParts(best)) do
-                pcall(firetouchinterest, root, part, 0)
-                pcall(firetouchinterest, root, part, 1)
-            end
-            WindUI:Notify({Title = "Purchased", Content = "Bought: " .. best.Name, Duration = 2, Icon = "check"})
-        else
-            WindUI:Notify({Title = "No Purchase", Content = "Nothing affordable.", Duration = 2, Icon = "x"})
-        end
-    end})
-
-    local SpawnSec = MPT_Economy_Tab:Section({Title = "Spawn Supremacy"})
-    SpawnSec:Toggle({Title = "Enable Supremacy Mode", Default = false, Callback = function(state)
-        AntiSpawnkill = state
-        if state then
-            player.CharacterAdded:Connect(function(c)
-                local hum = c:WaitForChild("Humanoid")
-                hum.MaxHealth = 9e9; hum.Health = 9e9
-                local ff = Instance.new("ForceField", c); ff.Visible = false
-                task.delay(5, function()
-                    if hum and hum.Parent then hum.MaxHealth = 100; hum.Health = 100 end
-                    if ff then ff:Destroy() end
-                end)
-            end)
-        end
-    end})
-    SpawnSec:Toggle({Title = "Fast Respawn", Default = false, Callback = function(state)
-        FastRespawn = state
-        if state then startFastRespawn() end
-    end})
-
-    local DefSec = MPT_Economy_Tab:Section({Title = "1000x Defense Matrix"})
-    DefSec:Toggle({Title = "Enable Defense Matrix", Default = false, Callback = function(state)
-        AntiAura.Enabled = state
-        if state then startAntiAura() else stopAntiAura() end
-    end})
-    DefSec:Toggle({Title = "ForceField God Mode", Default = false, Callback = function(state) AntiAura.GodMode = state end})
-    DefSec:Toggle({Title = "Weapon Repel", Default = false, Callback = function(state) AntiAura.Repel = state end})
-    DefSec:Toggle({Title = "Phase Mode (No Collide)", Default = false, Callback = function(state) AntiAura.Phase = state end})
-    DefSec:Toggle({Title = "Heal Aura", Default = false, Callback = function(state) AntiAura.HealAura = state end})
-    DefSec:Button({Title = "Emergency Heal", Callback = function()
-        local myChar = player.Character
-        if myChar then
-            local hum = myChar:FindFirstChild("Humanoid")
-            if hum then
-                hum.Health = hum.MaxHealth
-                WindUI:Notify({Title = "Healed", Content = "Health restored.", Duration = 2, Icon = "heart"})
-            end
-        end
-    end})
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  SENTINEL AI TAB (NEW)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local AIControlSec = AI_Tab:Section({Title = "Sentinel AI Control"})
-    AIControlSec:Toggle({Title = "Enable Sentinel AI", Default = true, Callback = function(state)
-        KillNotifEnabled = state
-        KillLogEnabled = state
-        if state then
-            Chat_CreateGUI()
-            Chat_AddMessage("AI", "Sentinel AI activated. I'm watching your back. Enable Kill Notifications to feed me data.", Color3.fromRGB(0, 255, 100))
-            WindUI:Notify({Title = "Sentinel AI", Content = "AI Combat Brain ONLINE. Chat overlay active.", Duration = 3, Icon = "brain"})
-        end
-    end})
-    AIControlSec:Toggle({Title = "Auto-Analyze Kills", Default = true, Callback = function(state)
-        KillNotifEnabled = state
-    end})
-    AIControlSec:Toggle({Title = "Auto-Counter (with confirmation)", Default = true, Callback = function(state)
-        -- When true, AI presents strategy and waits for Y/N
-        -- When false, AI only reports but doesn't propose actions
-    end})
-    AIControlSec:Button({Title = "Open AI Chat", Callback = function()
-        Chat_CreateGUI()
-        Chat_AddMessage("AI", "Chat opened. Type 'help' for commands.")
-    end})
-    AIControlSec:Button({Title = "Disable All AI Features", Callback = function()
-        Aura.Enabled = false; stopAuraLoop()
-        InstaKillEnabled = false; stopInstaKill()
-        HitAmpEnabled = false; stopHitAmplifier()
-        AntiAura.Enabled = false; stopAntiAura()
-        Reach = false; stopReach()
-        Chat_AddMessage("AI", "All AI-activated features disabled.", Color3.fromRGB(255, 200, 0))
-    end})
-
-    local AIInfoSec = AI_Tab:Section({Title = "AI Intelligence"})
-    AIInfoSec:Label({Title = "Threat Profiler: Tracks every killer's patterns"})
-    AIInfoSec:Label({Title = "Strategy Engine: Combines features to counter threats"})
-    AIInfoSec:Label({Title = "Chat System: Full bidirectional conversation"})
-    AIInfoSec:Label({Title = "Robot Analyst: Animated kill report processor"})
-    AIInfoSec:Label({Title = "Confirmation Gate: AI asks before acting"})
-    AIInfoSec:Button({Title = "View All Threat Profiles", Callback = function()
-        local count = 0
-        for name, prof in pairs(ThreatProfiles) do
-            count = count + 1
-            WindUI:Notify({
-                Title = "Profile: " .. name,
-                Content = "Kills: " .. prof.TotalKills .. " | Threat: " .. prof.ThreatScore
-                    .. "/100\nFeatures: " .. table.concat(prof.SuspectedFeatures, ", "),
-                Duration = 4, Icon = "user",
-            })
-        end
-        if count == 0 then
-            WindUI:Notify({Title = "Profiles", Content = "No threat profiles yet.", Duration = 2, Icon = "info"})
-        end
-    end})
-    AIInfoSec:Button({Title = "Reset All Profiles", Callback = function()
-        ThreatProfiles = {}
-        writeJSON(PROFILE_FILE, ThreatProfiles)
-        WindUI:Notify({Title = "Profiles", Content = "All threat profiles cleared.", Duration = 2, Icon = "trash"})
-    end})
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  UPDATES TAB
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local ChangeSec = Updates_Tab:Section({Title = "EXO Hub Changelog"})
-    ChangeSec:Label({Title = "v8.0 - SENTINEL AI (CURRENT)"})
-    ChangeSec:Label({Title = "  - NEW: Sentinel AI Combat Brain"})
-    ChangeSec:Label({Title = "  - NEW: Animated Robot Kill Analyst"})
-    ChangeSec:Label({Title = "  - NEW: Persistent Bidirectional Chat"})
-    ChangeSec:Label({Title = "  - NEW: Threat Profiler (per-player)"})
-    ChangeSec:Label({Title = "  - NEW: Strategy Engine (feature combos)"})
-    ChangeSec:Label({Title = "  - NEW: Confirmation Gate (asks before acting)"})
-    ChangeSec:Label({Title = "  - NEW: AI explains WHY you're losing"})
-    ChangeSec:Label({Title = "  - 1000x: Aura (multi-vector, triple remote, multi-hitbox)"})
-    ChangeSec:Label({Title = "  - 1000x: InstaKill (120Hz, parallel, 9 hitboxes)"})
-    ChangeSec:Label({Title = "  - 1000x: HitAmp (360 sphere+box, multi-pulse)"})
-    ChangeSec:Label({Title = "  - 1000x: AntiAura (heal, boosted repel, phase)"})
-    ChangeSec:Label({Title = "  - 1000x: ESP (threat-colored, names, distance)"})
-    ChangeSec:Label({Title = "  - 1000x: Tycoon (multi-buy, expanded claim)"})
-    ChangeSec:Label({Title = "  - 1000x: Reach (dynamic, up to 15x)"})
-    ChangeSec:Label({Title = " "})
-    ChangeSec:Label({Title = "v7.0 - UNLIMITED POWER"})
-    ChangeSec:Label({Title = "v6.0 - GODLY TIER"})
-    ChangeSec:Label({Title = "v5.0 - WindUI Edition"})
-    ChangeSec:Label({Title = "v1.1 - Initial release"})
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  SETTINGS TAB
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local UISec = Settings_Tab:Section({Title = "UI Config"})
-    UISec:Dropdown({Title = "Theme", Options = {"Default", "Dark", "Light", "Rose", "Ocean", "Amethyst"}, Default = 1, Callback = function(option)
-        pcall(function() WindUI:SetTheme(option) end)
-    end})
-
-    local GeneralSec = Settings_Tab:Section({Title = "General"})
-    GeneralSec:Toggle({Title = "Anti-Lag Shield", Default = false, Callback = function(state)
-        AntiLagEnabled = state
-        if state then startAntiLag() else stopAntiLag() end
-    end})
-    GeneralSec:Toggle({Title = "ESP (Threat-Colored)", Default = false, Callback = function(state)
-        ESPEnabled = state
-        if state then startESP() else stopESP() end
-    end})
-    GeneralSec:Toggle({Title = "Kill Notifications", Default = false, Callback = function(state)
-        KillNotifEnabled = state
-        if state then
-            WindUI:Notify({Title = "Kill Notifications", Content = "Behavioral analysis + Sentinel AI enabled.", Duration = 4, Icon = "bell"})
-        end
-    end})
-    GeneralSec:Toggle({Title = "Kill Logs", Default = false, Callback = function(state) KillLogEnabled = state end})
-    GeneralSec:Button({Title = "View Kill Logs", Callback = function()
-        if #KillLogs == 0 then
-            WindUI:Notify({Title = "Kill Logs", Content = "No kills recorded yet.", Duration = 2, Icon = "info"})
-            return
-        end
-        local lastLog = KillLogs[#KillLogs]
-        WindUI:Notify({
-            Title = "Last Kill Log",
-            Content = "Killer: " .. lastLog.Killer .. "\nWeapon: " .. lastLog.Weapon
-                .. "\nThreat: " .. lastLog.Threat .. "/10\nTTK: " .. string.format("%.2f", lastLog.TTK) .. "s\nTotal logs: " .. #KillLogs,
-            Duration = 5, Icon = "scroll-text",
-        })
-    end})
-
-    local ConfigSec = Settings_Tab:Section({Title = "Config"})
-    ConfigSec:Button({Title = "Save Config", Callback = function()
-        local config = {
-            ReachSize = ReachSize,
-            ThreatRadius = ThreatRadius,
-            latencyEstimate = latencyEstimate,
-            IK_BurstCount = IK_BurstCount,
-            HA_Range = HA_Range.X,
-            HA_BurstCount = HA_BurstCount,
-            TG_BurstCount = TG_BurstCount,
-            AntiAura_RepelForce = AntiAura.RepelForce,
-            AntiAura_RepelRadius = AntiAura.RepelRadius,
-        }
-        writeJSON(CONFIG_FILE, config)
-        WindUI:Notify({Title = "Config Saved", Content = "Settings saved.", Duration = 2, Icon = "save"})
-    end})
-    ConfigSec:Button({Title = "Load Config", Callback = function()
-        local config = readJSON(CONFIG_FILE)
-        if config then
-            ReachSize = config.ReachSize or 3
-            ThreatRadius = config.ThreatRadius or 60
-            latencyEstimate = config.latencyEstimate or 0.08
-            IK_BurstCount = config.IK_BurstCount or 12
-            HA_Range = Vector3.new(config.HA_Range or 45, config.HA_Range or 45, config.HA_Range or 45)
-            HA_BurstCount = config.HA_BurstCount or 8
-            TG_BurstCount = config.TG_BurstCount or 12
-            AntiAura.RepelForce = config.AntiAura_RepelForce or 120
-            AntiAura.RepelRadius = config.AntiAura_RepelRadius or 18
-            WindUI:Notify({Title = "Config Loaded", Content = "Settings restored.", Duration = 2, Icon = "folder-open"})
-        else
-            WindUI:Notify({Title = "No Config", Content = "No saved config found.", Duration = 2, Icon = "x"})
-        end
-    end})
-    ConfigSec:Button({Title = "Rejoin Server", Callback = function()
-        TeleportService:Teleport(game.PlaceId, player)
-    end})
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 32: SETUP & FINALIZE                                     ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-setupKillNotifications()
-
-WindUI:Notify({
-    Title = "EXO Hub v8.0 – SENTINEL AI",
-    Content = "All systems online. 1000x UPGRADE. AI Combat Brain ACTIVE.\nEnable Kill Notifications to feed the AI.",
-    Duration = 5,
-    Icon = "check-circle",
-})
-
-print("[EXO] Hub v8.0 SENTINEL AI loaded. Build: " .. _EXO_BUILD)
-print("[EXO] AI Chat: Type 'help' in the Sentinel chat overlay")
-print("[EXO] Features: Aura(1000x) InstaKill(120Hz) HitAmp(360) AntiAura(Heal+Repel+Phase) ESP(Threat) AI(Adaptive)")
