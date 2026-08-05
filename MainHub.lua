@@ -1,22 +1,19 @@
--- ═══════════════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════════
 --  ███████╗██╗  ██╗ ██████╗     ██╗  ██╗ █████╗ ██╗   ██╗██████╗  ██████╗
 --  ██╔════╝╚██╗██╔╝██╔═══██╗    ██║  ██║██╔══██╗██║   ██║██╔══██╗██╔═══██╗
 --  █████╗   ╚███╔╝ ██║   ██║    ███████║███████║██║   ██║██║  ██║██║   ██║
 --  ██╔══╝   ██╔██╗ ██║   ██║    ██╔══██║██╔══██║██║   ██║██║  ██║██║   ██║
 --  ███████╗██╔╝ ██╗╚██████╔╝    ██║  ██║██║  ██║╚██████╔╝██████╔╝╚██████╔╝
 --  ╚══════╝╚═╝  ╚═╝ ╚═════╝     ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝
---
---  EXO HUB v8.0 – SENTINEL AI
---  1000x UPGRADE | ADAPTIVE AI COMBAT BRAIN | PERSISTENT CHAT
---  ANIMATED ROBOT ANALYST | AUTO-COUNTER STRATEGIES | CONFIRMATION SYSTEM
---  GODLY TIER+ | PROTECTED | OBFUSCATED
--- ═══════════════════════════════════════════════════════════════════════════
+--  EXO HUB v8.0 – SENTINEL AI | ZYRONX BLUE | GODLY TIER+ | PROTECTED
+--  FULL 32-SECTION ARCHITECTURE | NO SHORTENING | ALL FEATURES PRESERVED
+-- ═══════════════════════════════════════════════════════════════════════
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
 -- ║  SECTION 0: ANTI-TAMPER INTEGRITY                                   ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
 local _EXO_V = 8.0
-local _EXO_BUILD = "SENTINEL_AI"
+local _EXO_BUILD = "SENTINEL_AI_FULL"
 local _EXO_INTEGRITY = true
 
 pcall(function()
@@ -62,17 +59,686 @@ local function _exo_hash(str)
     return h
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 2: LOAD WINDUI                                            ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/raw/main/dist/main.lua"))()
-if not WindUI then
-    warn("[EXO] FATAL: WindUI failed to load. Aborting.")
-    return
+local function exo_obfuscate_name(prefix, index)
+    return prefix .. "" .. tostring(index * 7 + 13) .. "_" .. string.char(65 + (index % 26))
 end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 3: SERVICES                                               ║
+-- ║  SECTION 2: LOAD ZYRONX UI LIBRARY (BLUE THEME)                    ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+-- Full ZyronX library embedded with Blue theme + Unlimited Tabs patch
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local TextService = game:GetService("TextService")
+
+local Library = { WhitelistedUsers = {} }
+
+local _isfolder = isfolder or function() return true end
+local _makefolder = makefolder or function() end
+local _writefile = writefile or function(path, data) warn("File saving not supported.") end
+local _readfile = readfile or function() return "{}" end
+local _listfiles = listfiles or function() return {} end
+local _delfile = delfile or function() warn("File deletion not supported.") end
+
+local function SafeCopyToClipboard(text)
+    if setclipboard then setclipboard(text)
+    elseif toclipboard then toclipboard(text)
+    else warn("Clipboard not supported.") end
+end
+
+local function Create(className, properties)
+    local instance = Instance.new(className)
+    if className == "TextBox" then instance.Text = "" end
+    for k, v in pairs(properties or {}) do instance[k] = v end
+    if (className == "TextLabel" or className == "TextButton" or className == "TextBox") then
+        if properties.TextSize and properties.RichText ~= true then
+            instance.TextScaled = true
+            local constraint = Instance.new("UITextSizeConstraint")
+            constraint.MaxTextSize = properties.TextSize
+            constraint.MinTextSize = 6
+            constraint.Parent = instance
+        end
+    end
+    return instance
+end
+
+local function BuildSearchIndex(card)
+    local parts = {}
+    for _, desc in ipairs(card:GetDescendants()) do
+        if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+            if desc.Text and desc.Text ~= "" then table.insert(parts, desc.Text:lower()) end
+        end
+    end
+    return table.concat(parts, " ")
+end
+
+local function Tween(instance, properties, duration)
+    duration = duration or 0.25
+    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(instance, tweenInfo, properties)
+    tween:Play()
+    return tween
+end
+
+local function AddBounce(button, scaleFactor)
+    scaleFactor = scaleFactor or 0.96
+    local scaleObj = button:FindFirstChild("UIScale") or Create("UIScale", {Parent = button, Scale = 1})
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            Tween(scaleObj, {Scale = scaleFactor}, 0.15)
+        end
+    end)
+    button.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            Tween(scaleObj, {Scale = 1}, 0.15)
+        end
+    end)
+    button.MouseLeave:Connect(function() Tween(scaleObj, {Scale = 1}, 0.15) end)
+end
+
+local function MakeDraggable(topbar, object)
+    topbar.Active = true
+    object.Active = true
+    local dragging, dragInput, dragStart, startPos
+    topbar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = object.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    topbar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            Tween(object, {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}, 0.08)
+        end
+    end)
+end
+
+-- ★ BLUE THEME COLORS ★
+local AccentColor = Color3.fromRGB(0, 150, 255)
+local BackgroundColor = Color3.fromRGB(12, 14, 20)
+local CardColor = Color3.fromRGB(18, 22, 30)
+local HoverColor = Color3.fromRGB(25, 35, 55)
+local TextColor = Color3.fromRGB(230, 240, 255)
+local SubTextColor = Color3.fromRGB(120, 140, 170)
+
+local GlobalNotifContainer
+
+function Library:Notify(options)
+    if not GlobalNotifContainer then return end
+    local title = options.Title or "Notification"
+    local desc = options.Description or "Information updated."
+    local duration = options.Duration or 3
+
+    local Notif = Create("Frame", {Parent = GlobalNotifContainer, BackgroundColor3 = Color3.fromRGB(14, 18, 26), Size = UDim2.new(1, 0, 0, 65), BackgroundTransparency = 1, ZIndex = 201, ClipsDescendants = true})
+    Create("UICorner", {Parent = Notif, CornerRadius = UDim.new(0, 8)})
+    local Stroke = Create("UIStroke", {Parent = Notif, Color = AccentColor, Thickness = 1.5, Transparency = 1})
+    local TitleText = Create("TextLabel", {Parent = Notif, Text = title, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 15, 0, 15), Size = UDim2.new(1, -30, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
+    local DescText = Create("TextLabel", {Parent = Notif, Text = desc, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 15, 0, 32), Size = UDim2.new(1, -30, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
+
+    Tween(Notif, {BackgroundTransparency = 0}, 0.3)
+    Tween(Stroke, {Transparency = 0}, 0.3)
+    Tween(TitleText, {TextTransparency = 0}, 0.3)
+    Tween(DescText, {TextTransparency = 0}, 0.3)
+
+    task.delay(duration, function()
+        Tween(Notif, {BackgroundTransparency = 1}, 0.4)
+        Tween(Stroke, {Transparency = 1}, 0.4)
+        Tween(TitleText, {TextTransparency = 1}, 0.4)
+        Tween(DescText, {TextTransparency = 1}, 0.4)
+        task.wait(0.4); Notif:Destroy()
+    end)
+end
+
+function Library:CreateWindow(options)
+    local hubName = "EXO Hub"
+    local subText = "SENTINEL AI | v8.0"
+    local subColor = AccentColor
+    local sphTextToggle = true
+    local sphWords = "EXO"
+    local sphImage = nil
+    local topbarLogo = nil
+    local logoSize = 32
+    local sphIconSize = 26
+
+    if type(options) == "table" then
+        hubName = options.Title or hubName
+        subText = options.Subtitle or subText
+        subColor = options.SubtitleColor or subColor
+        if options.SphereText ~= nil then sphTextToggle = options.SphereText end
+        if options.SphereWords ~= nil then
+            local wordList = string.split(tostring(options.SphereWords), " ")
+            if #wordList > 2 then sphWords = wordList[1] .. " " .. wordList[2]
+            else sphWords = tostring(options.SphereWords) end
+        end
+        sphImage = options.SphereImage
+        topbarLogo = options.Logo
+        logoSize = options.LogoSize or 32
+        sphIconSize = options.SphereIconSize or 26
+    elseif type(options) == "string" then hubName = options end
+
+    local uniqueID = HttpService:GenerateGUID(false)
+    local ScreenGui = Create("ScreenGui", {
+        Name = "EXO_ZX_" .. uniqueID,
+        Parent = RunService:IsStudio() and game.Players.LocalPlayer:WaitForChild("PlayerGui") or CoreGui,
+        ResetOnSpawn = false, IgnoreGuiInset = true
+    })
+
+    local NotifContainer = Create("Frame", {
+        Parent = ScreenGui, BackgroundTransparency = 1,
+        Size = UDim2.new(0, 320, 1, -20), Position = UDim2.new(1, -340, 0, 10),
+        ZIndex = 200, Active = false
+    })
+    Create("UIListLayout", {Parent = NotifContainer, VerticalAlignment = Enum.VerticalAlignment.Bottom, HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12)})
+    GlobalNotifContainer = NotifContainer
+
+    -- Info Overlay
+    local InfoOverlay = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(5, 5, 8), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 150, Visible = false, Active = true})
+    local InfoCard = Create("Frame", {Parent = InfoOverlay, BackgroundColor3 = Color3.fromRGB(14, 18, 26), Size = UDim2.new(0, 360, 0, 280), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 151, BackgroundTransparency = 1, ClipsDescendants = true})
+    Create("UICorner", {Parent = InfoCard, CornerRadius = UDim.new(0, 8)})
+    Create("UIStroke", {Parent = InfoCard, Color = AccentColor, Thickness = 1.5, Transparency = 1})
+    local InfoScale = Create("UIScale", {Parent = InfoCard, Scale = 0})
+    local InfoHeader = Create("Frame", {Parent = InfoCard, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), ZIndex = 152})
+    local InfoTitle = Create("TextLabel", {Parent = InfoHeader, Text = "Feature Info", Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = TextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 0), Size = UDim2.new(1, -60, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 152})
+    local InfoCloseBtn = Create("TextButton", {Parent = InfoHeader, Text = "X", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 40, 1, 0), Position = UDim2.new(1, -40, 0, 0), ZIndex = 152, TextTransparency = 1})
+    AddBounce(InfoCloseBtn)
+    local InfoScroll = Create("ScrollingFrame", {Parent = InfoCard, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 1, -60), Position = UDim2.new(0, 20, 0, 50), CanvasSize = UDim2.new(0, 0, 0, 0), ScrollBarThickness = 2, ScrollBarImageColor3 = AccentColor, BorderSizePixel = 0, ZIndex = 152})
+    local InfoLayout = Create("UIListLayout", {Parent = InfoScroll, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10)})
+    local InfoDesc = Create("TextLabel", {Parent = InfoScroll, Text = "", Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 152, TextTransparency = 1})
+    InfoLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() InfoScroll.CanvasSize = UDim2.new(0, 0, 0, InfoLayout.AbsoluteContentSize.Y + 10) end)
+
+    local function OpenInfoWindow(data)
+        InfoTitle.Text = data.Title or "Information"
+        InfoDesc.Text = data.Description or "No description provided."
+        InfoOverlay.Visible = true
+        Tween(InfoOverlay, {BackgroundTransparency = 0.4}, 0.3)
+        Tween(InfoCard, {BackgroundTransparency = 0}, 0.3)
+        Tween(InfoCard:FindFirstChild("UIStroke"), {Transparency = 0.3}, 0.3)
+        Tween(InfoScale, {Scale = 1}, 0.3)
+        Tween(InfoTitle, {TextTransparency = 0}, 0.3)
+        Tween(InfoCloseBtn, {TextTransparency = 0}, 0.3)
+        Tween(InfoDesc, {TextTransparency = 0}, 0.3)
+    end
+
+    InfoCloseBtn.MouseButton1Click:Connect(function()
+        Tween(InfoOverlay, {BackgroundTransparency = 1}, 0.3)
+        Tween(InfoCard, {BackgroundTransparency = 1}, 0.3)
+        Tween(InfoCard:FindFirstChild("UIStroke"), {Transparency = 1}, 0.3)
+        Tween(InfoScale, {Scale = 0}, 0.3)
+        Tween(InfoTitle, {TextTransparency = 1}, 0.3)
+        Tween(InfoCloseBtn, {TextTransparency = 1}, 0.3)
+        Tween(InfoDesc, {TextTransparency = 1}, 0.3)
+        task.wait(0.3); InfoOverlay.Visible = false
+    end)
+
+    local function AddInfoIcon(parent, pos, data)
+        if not data then return end
+        local Btn = Create("TextButton", {Parent = parent, Text = "?", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = SubTextColor, BackgroundColor3 = Color3.fromRGB(25, 35, 55), Size = UDim2.new(0, 16, 0, 16), Position = pos, AutoButtonColor = false, ZIndex = 5})
+        Create("UICorner", {Parent = Btn, CornerRadius = UDim.new(1, 0)})
+        AddBounce(Btn)
+        Btn.MouseEnter:Connect(function() Tween(Btn, {TextColor3 = TextColor, BackgroundColor3 = AccentColor}, 0.2) end)
+        Btn.MouseLeave:Connect(function() Tween(Btn, {TextColor3 = SubTextColor, BackgroundColor3 = Color3.fromRGB(25, 35, 55)}, 0.2) end)
+        Btn.MouseButton1Click:Connect(function() OpenInfoWindow(data) end)
+    end
+
+    local MainFrame = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, Size = UDim2.new(0, 650, 0, 450), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ClipsDescendants = true, BackgroundTransparency = 1, Active = true})
+    local MainScale = Create("UIScale", {Parent = MainFrame, Scale = 0.8})
+    Create("UICorner", {Parent = MainFrame, CornerRadius = UDim.new(0, 8)})
+    Create("UIStroke", {Parent = MainFrame, Color = Color3.fromRGB(30, 50, 80), Thickness = 1})
+    Tween(MainScale, {Scale = 1}, 0.5)
+    Tween(MainFrame, {BackgroundTransparency = 0}, 0.5)
+
+    -- Floating Bottom Bar
+    local BottomDragHitbox = Create("Frame", {Parent = ScreenGui, BackgroundTransparency = 1, Size = UDim2.new(0, 350, 0, 30), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 145, Active = true})
+    local FloatingBottomBar = Create("Frame", {Parent = BottomDragHitbox, BackgroundColor3 = CardColor, BackgroundTransparency = 0, Size = UDim2.new(1, 0, 0, 6), Position = UDim2.new(0, 0, 0.5, -3), ZIndex = 146})
+    Create("UICorner", {Parent = FloatingBottomBar, CornerRadius = UDim.new(1, 0)})
+    local BottomBarStroke = Create("UIStroke", {Parent = FloatingBottomBar, Color = Color3.fromRGB(30, 50, 80), Thickness = 1.2, Transparency = 0})
+    MakeDraggable(BottomDragHitbox, MainFrame)
+
+    RunService.RenderStepped:Connect(function()
+        if MainFrame and MainFrame.Visible then
+            BottomDragHitbox.Visible = true
+            local currentScale = MainScale.Scale
+            local frameHeight = 450 * currentScale
+            local frameWidth = 650 * currentScale
+            BottomDragHitbox.Position = UDim2.new(MainFrame.Position.X.Scale, MainFrame.Position.X.Offset, MainFrame.Position.Y.Scale, MainFrame.Position.Y.Offset + (frameHeight / 2) + 20)
+            BottomDragHitbox.Size = UDim2.new(0, frameWidth * 0.6, 0, 30 * currentScale)
+            FloatingBottomBar.Size = UDim2.new(1, 0, 0, 6 * currentScale)
+            FloatingBottomBar.Position = UDim2.new(0, 0, 0.5, -(3 * currentScale))
+        else BottomDragHitbox.Visible = false end
+    end)
+
+    local TopBar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 0), Active = true})
+    MakeDraggable(TopBar, MainFrame)
+
+    local titleOffsetX = 15
+    if topbarLogo then
+        local TopbarIcon = Create("ImageLabel", {Parent = TopBar, BackgroundTransparency = 1, Size = UDim2.new(0, logoSize, 0, logoSize), Position = UDim2.new(0, 8, 0.5, -(logoSize / 2)), Image = topbarLogo, ScaleType = Enum.ScaleType.Fit})
+        titleOffsetX = 8 + logoSize + 8
+    end
+
+    local TitleContainer = Create("Frame", {Parent = TopBar, BackgroundTransparency = 1, Size = UDim2.new(0, 200, 1, 0), Position = UDim2.new(0, titleOffsetX, 0, 0)})
+    local Title = Create("TextLabel", {Parent = TitleContainer, Text = hubName, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = TextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 5), Size = UDim2.new(1, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left})
+    local Subtitle = Create("TextLabel", {Parent = TitleContainer, Text = subText, Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = subColor, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 0, 12), TextXAlignment = Enum.TextXAlignment.Left})
+
+    local SearchBar = Create("Frame", {Parent = TopBar, BackgroundColor3 = CardColor, Size = UDim2.new(0, 220, 0, 26), Position = UDim2.new(0, 220, 0.5, -13)})
+    Create("UICorner", {Parent = SearchBar, CornerRadius = UDim.new(0, 6)})
+    local SearchIcon = Create("ImageLabel", {Parent = SearchBar, BackgroundTransparency = 1, Image = "rbxassetid://6031154871", ImageColor3 = SubTextColor, Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(0, 8, 0.5, -7)})
+    local SearchInput = Create("TextBox", {Parent = SearchBar, BackgroundTransparency = 1, Size = UDim2.new(1, -30, 1, 0), Position = UDim2.new(0, 30, 0, 0), Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, PlaceholderText = "Search..", TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
+
+    local CloseBtn = Create("TextButton", {Parent = TopBar, Text = "X", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -35, 0, 0)})
+    local MinBtn = Create("TextButton", {Parent = TopBar, Text = "—", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -65, 0, 0)})
+
+    -- Sidebar (UNLIMITED TABS FIX)
+    local Sidebar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 1, Size = UDim2.new(0, 160, 1, -40), Position = UDim2.new(0, 0, 0, 40), Active = true})
+    local TabContainer = Create("ScrollingFrame", {Parent = Sidebar, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 1, -10), Position = UDim2.new(0, 5, 0, 5), ScrollBarThickness = 2, ScrollBarImageColor3 = AccentColor, CanvasSize = UDim2.new(0, 0, 0, 0)})
+    Create("UIListLayout", {Parent = TabContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
+    TabContainer.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        TabContainer.CanvasSize = UDim2.new(0, 0, 0, TabContainer.UIListLayout.AbsoluteContentSize.Y + 10)
+    end)
+
+    local Divider = Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(30, 50, 80), BorderSizePixel = 0, Size = UDim2.new(0, 1, 1, -40), Position = UDim2.new(0, 160, 0, 40)})
+    local ContentArea = Create("Frame", {Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -165, 1, -40), Position = UDim2.new(0, 165, 0, 40), Active = true})
+
+    -- Minimize Sphere
+    local Sphere = Create("ImageButton", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 0.2, Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Visible = false, AutoButtonColor = false, ImageTransparency = 1, ClipsDescendants = true})
+    Create("UICorner", {Parent = Sphere, CornerRadius = UDim.new(1, 0)})
+    Create("UIStroke", {Parent = Sphere, Color = AccentColor, Thickness = 2})
+    local SphereTextLabel = Create("TextLabel", {Parent = Sphere, Text = sphWords, Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = AccentColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), TextTransparency = 1, Visible = sphTextToggle})
+    MakeDraggable(Sphere, Sphere)
+
+    local Window = {CurrentTab = nil, Tabs = {}, Title = Title, AllCards = {}, MainFrame = MainFrame, CurrentTransparency = 0, ConfigElements = {}}
+
+    function Window:SetTransparency(val)
+        Window.CurrentTransparency = val
+        if MainFrame.Visible then
+            Tween(MainFrame, {BackgroundTransparency = val}, 0.3)
+            Tween(FloatingBottomBar, {BackgroundTransparency = val > 0 and 0.2 or 0}, 0.3)
+        end
+    end
+
+    MinBtn.MouseButton1Click:Connect(function()
+        Tween(MainScale, {Scale = 0}, 0.4)
+        Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
+        Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.4)
+        Tween(BottomBarStroke, {Transparency = 1}, 0.4)
+        task.wait(0.3)
+        MainFrame.Visible = false; BottomDragHitbox.Visible = false
+        Sphere.Visible = true
+        Tween(Sphere, {Size = UDim2.new(0, 50, 0, 50)}, 0.4)
+        if sphTextToggle then Tween(SphereTextLabel, {TextTransparency = 0}, 0.4) end
+    end)
+
+    Sphere.MouseButton1Click:Connect(function()
+        Tween(Sphere, {Size = UDim2.new(0, 0, 0, 0)}, 0.3)
+        if sphTextToggle then Tween(SphereTextLabel, {TextTransparency = 1}, 0.3) end
+        task.wait(0.2)
+        Sphere.Visible = false; MainFrame.Visible = true; BottomDragHitbox.Visible = true
+        Tween(MainScale, {Scale = 1}, 0.4)
+        Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
+        Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
+        Tween(BottomBarStroke, {Transparency = 0}, 0.4)
+    end)
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        Tween(MainScale, {Scale = 0.8}, 0.3)
+        Tween(MainFrame, {BackgroundTransparency = 1}, 0.3)
+        Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.3)
+        Tween(BottomBarStroke, {Transparency = 1}, 0.3)
+        for _, desc in ipairs(MainFrame:GetDescendants()) do
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                Tween(desc, {TextTransparency = 1}, 0.3)
+                if desc.BackgroundTransparency < 1 then Tween(desc, {BackgroundTransparency = 1}, 0.3) end
+            elseif desc:IsA("ImageLabel") or desc:IsA("ImageButton") then Tween(desc, {ImageTransparency = 1}, 0.3)
+            elseif desc:IsA("Frame") or desc:IsA("ScrollingFrame") then if desc.BackgroundTransparency < 1 then Tween(desc, {BackgroundTransparency = 1}, 0.3) end
+            elseif desc:IsA("UIStroke") then Tween(desc, {Transparency = 1}, 0.3) end
+        end
+        task.wait(0.35); ScreenGui:Destroy()
+    end)
+
+    SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
+        local query = SearchInput.Text:lower()
+        if query == "" then
+            for _, data in ipairs(Window.AllCards) do data.Card.Parent = data.OrigParent; data.Card.Visible = true end
+        else
+            if not Window.CurrentTab or not Window.CurrentTab.CurrentPage then return end
+            local activeLeft = Window.CurrentTab.CurrentPage.LeftCol
+            local activeRight = Window.CurrentTab.CurrentPage.RightCol
+            local placeLeft = true
+            for _, data in ipairs(Window.AllCards) do
+                local card = data.Card
+                if data.Tab == Window.CurrentTab then
+                    if not data.SearchIndex then data.SearchIndex = BuildSearchIndex(card) end
+                    local match = string.find(data.SearchIndex, query, 1, true)
+                    if match then card.Parent = placeLeft and activeLeft or activeRight; placeLeft = not placeLeft; card.Visible = true
+                    else card.Visible = false end
+                else card.Parent = data.OrigParent; card.Visible = true end
+            end
+        end
+    end)
+
+    function Window:CreateTab(tabName, isDefault, isLocked)
+        local isWhitelisted = false
+        local player = game:GetService("Players").LocalPlayer
+        if player then
+            for _, allowedUser in ipairs(Library.WhitelistedUsers) do
+                if player.Name == allowedUser or player.DisplayName == allowedUser then isWhitelisted = true; break end
+            end
+        end
+
+        local TabBtn = Create("TextButton", {Parent = TabContainer, Text = "", BackgroundColor3 = HoverColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35), AutoButtonColor = false})
+        Create("UICorner", {Parent = TabBtn, CornerRadius = UDim.new(0, 6)})
+        AddBounce(TabBtn, 0.98)
+        local Indicator = Create("Frame", {Name = "Indicator", Parent = TabBtn, BackgroundColor3 = isLocked and Color3.fromRGB(255, 215, 0) or AccentColor, Size = UDim2.new(0, 3, 0, 0), Position = UDim2.new(0, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5)})
+        Create("UICorner", {Parent = Indicator, CornerRadius = UDim.new(1, 0)})
+        local Txt = Create("TextLabel", {Parent = TabBtn, Text = tabName, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 15, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+
+        if isLocked then
+            Create("ImageLabel", {Parent = TabBtn, Image = "rbxassetid://6031082533", ImageColor3 = Color3.fromRGB(255, 215, 0), BackgroundTransparency = 1, Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -22, 0.5, -7)})
+        end
+
+        local TabContent = Create("Frame", {Parent = ContentArea, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Visible = false})
+        local PageNav = Create("Frame", {Parent = TabContent, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35)})
+        local PageNavList = Create("UIListLayout", {Parent = PageNav, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Center})
+        local PageContainer = Create("Frame", {Parent = TabContent, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -35), Position = UDim2.new(0, 0, 0, 35)})
+
+        local TabConfig = {Button = TabBtn, Content = TabContent, Indicator = Indicator, Txt = Txt, Pages = {}, CurrentPage = nil}
+        table.insert(Window.Tabs, TabConfig)
+
+        TabBtn.MouseButton1Click:Connect(function()
+            if isLocked and not isWhitelisted then Library:Notify({Title = "ACCESS DENIED", Description = "This tab is whitelisted."}); return end
+            if Window.CurrentTab == TabConfig then return end
+            if Window.CurrentTab then
+                Tween(Window.CurrentTab.Button, {BackgroundTransparency = 1}, 0.2)
+                Tween(Window.CurrentTab.Indicator, {Size = UDim2.new(0, 3, 0, 0)}, 0.2)
+                Tween(Window.CurrentTab.Txt, {TextColor3 = SubTextColor}, 0.2)
+                Window.CurrentTab.Content.Visible = false
+            end
+            Window.CurrentTab = TabConfig
+            TabConfig.Content.Visible = true
+            TabConfig.Content.Position = UDim2.new(0, 0, 0, 15)
+            Tween(TabConfig.Content, {Position = UDim2.new(0, 0, 0, 0)}, 0.35)
+            Tween(TabBtn, {BackgroundTransparency = 0}, 0.2)
+            Tween(Indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.3)
+            Tween(Txt, {TextColor3 = TextColor}, 0.2)
+            if #TabConfig.Pages > 0 then
+                local firstPage = TabConfig.Pages[1]
+                if TabConfig.CurrentPage ~= firstPage then
+                    if TabConfig.CurrentPage then
+                        Tween(TabConfig.CurrentPage.Btn, {TextColor3 = SubTextColor}, 0)
+                        Tween(TabConfig.CurrentPage.Highlight, {Size = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1}, 0)
+                        TabConfig.CurrentPage.Scroll.Visible = false
+                    end
+                    TabConfig.CurrentPage = firstPage
+                    firstPage.Scroll.Visible = true
+                    firstPage.Scroll.Position = UDim2.new(0, 5, 0, 15)
+                    Tween(firstPage.Scroll, {Position = UDim2.new(0, 5, 0, 5)}, 0.35)
+                    Tween(firstPage.Btn, {TextColor3 = TextColor}, 0)
+                    Tween(firstPage.Highlight, {Size = UDim2.new(1, 0, 0, 2), BackgroundTransparency = 0}, 0)
+                end
+            end
+        end)
+
+        function TabConfig:CreatePage(pageName)
+            local PageBtn = Create("TextButton", {Parent = PageNav, Text = pageName, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X})
+            local PageHighlight = Create("Frame", {Parent = PageBtn, BackgroundColor3 = AccentColor, Size = UDim2.new(0, 0, 0, 2), Position = UDim2.new(0.5, 0, 1, -5), AnchorPoint = Vector2.new(0.5, 0), BackgroundTransparency = 1})
+            local PageScroll = Create("ScrollingFrame", {Parent = PageContainer, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 1, -10), Position = UDim2.new(0, 5, 0, 5), ScrollBarThickness = 2, ScrollBarImageColor3 = Color3.fromRGB(60, 80, 120), Visible = false, BorderSizePixel = 0})
+            local LeftColumn = Create("Frame", {Parent = PageScroll, BackgroundTransparency = 1, Size = UDim2.new(0.5, -5, 1, 0)})
+            local RightColumn = Create("Frame", {Parent = PageScroll, BackgroundTransparency = 1, Size = UDim2.new(0.5, -5, 1, 0), Position = UDim2.new(0.5, 5, 0, 0)})
+            local L_Layout = Create("UIListLayout", {Parent = LeftColumn, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10)})
+            local R_Layout = Create("UIListLayout", {Parent = RightColumn, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10)})
+            L_Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() PageScroll.CanvasSize = UDim2.new(0, 0, 0, math.max(L_Layout.AbsoluteContentSize.Y, R_Layout.AbsoluteContentSize.Y) + 20) end)
+            R_Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() PageScroll.CanvasSize = UDim2.new(0, 0, 0, math.max(L_Layout.AbsoluteContentSize.Y, R_Layout.AbsoluteContentSize.Y) + 20) end)
+
+            local PageObj = {Scroll = PageScroll, Btn = PageBtn, Highlight = PageHighlight, Left = true, LeftCol = LeftColumn, RightCol = RightColumn}
+            table.insert(TabConfig.Pages, PageObj)
+
+            PageBtn.MouseButton1Click:Connect(function()
+                if TabConfig.CurrentPage == PageObj then return end
+                if TabConfig.CurrentPage then
+                    Tween(TabConfig.CurrentPage.Btn, {TextColor3 = SubTextColor}, 0.2)
+                    Tween(TabConfig.CurrentPage.Highlight, {Size = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1}, 0.2)
+                    TabConfig.CurrentPage.Scroll.Visible = false
+                end
+                TabConfig.CurrentPage = PageObj
+                PageObj.Scroll.Visible = true
+                PageObj.Scroll.Position = UDim2.new(0, 5, 0, 20)
+                Tween(PageObj.Scroll, {Position = UDim2.new(0, 5, 0, 5)}, 0.35)
+                Tween(PageBtn, {TextColor3 = TextColor}, 0.2)
+                Tween(PageHighlight, {Size = UDim2.new(1, 0, 0, 2), BackgroundTransparency = 0}, 0.3)
+            end)
+
+            if #TabConfig.Pages == 1 and not isLocked then
+                TabConfig.CurrentPage = PageObj
+                PageObj.Scroll.Visible = true
+                PageBtn.TextColor3 = TextColor
+                PageHighlight.Size = UDim2.new(1, 0, 0, 2)
+                PageHighlight.BackgroundTransparency = 0
+            end
+
+            function PageObj:CreateSection(sectionName)
+                local targetColumn = PageObj.Left and LeftColumn or RightColumn
+                PageObj.Left = not PageObj.Left
+                local SectionContainer = Create("Frame", {Parent = targetColumn, BackgroundColor3 = CardColor, Size = UDim2.new(1, 0, 0, 30), AutomaticSize = Enum.AutomaticSize.Y, ClipsDescendants = true})
+                Create("UICorner", {Parent = SectionContainer, CornerRadius = UDim.new(0, 6)})
+                table.insert(Window.AllCards, {Card = SectionContainer, OrigParent = targetColumn, Tab = TabConfig, Page = PageObj, SearchIndex = nil})
+                local TitleLbl = Create("TextLabel", {Parent = SectionContainer, Text = sectionName, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 30), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+                local ItemContainer = Create("Frame", {Parent = SectionContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 0, 30), AutomaticSize = Enum.AutomaticSize.Y})
+                local Pad = Create("UIPadding", {Parent = ItemContainer, PaddingBottom = UDim.new(0, 10), PaddingTop = UDim.new(0, 5)})
+                local SList = Create("UIListLayout", {Parent = ItemContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8)})
+
+                local Elements = {}
+
+                function Elements:AddButton(name, callback, infoData)
+                    local BtnFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30)})
+                    local Btn = Create("TextButton", {Parent = BtnFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 10, 0, 0), AutoButtonColor = false})
+                    Create("UICorner", {Parent = Btn, CornerRadius = UDim.new(0, 4)})
+                    Create("UIStroke", {Parent = Btn, Color = Color3.fromRGB(30, 50, 80), Thickness = 1})
+                    AddBounce(Btn)
+                    Btn.MouseEnter:Connect(function() Tween(Btn, {BackgroundColor3 = HoverColor}, 0.2) end)
+                    Btn.MouseLeave:Connect(function() Tween(Btn, {BackgroundColor3 = BackgroundColor}, 0.2) end)
+                    Btn.MouseButton1Click:Connect(function() if callback then callback() end end)
+                    AddInfoIcon(BtnFrame, UDim2.new(1, -40, 0.5, -8), infoData)
+                end
+
+                function Elements:AddToggle(name, default, callback, infoData)
+                    local state = default or false
+                    local TogFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 24)})
+                    Create("TextLabel", {Parent = TogFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -60, 1, 0), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+                    local Lever = Create("TextButton", {Parent = TogFrame, Text = "", BackgroundColor3 = state and AccentColor or Color3.fromRGB(30, 40, 60), Size = UDim2.new(0, 36, 0, 18), Position = UDim2.new(1, -46, 0.5, -9), AutoButtonColor = false})
+                    Create("UICorner", {Parent = Lever, CornerRadius = UDim.new(1, 0)})
+                    AddBounce(Lever)
+                    local Knob = Create("Frame", {Parent = Lever, BackgroundColor3 = Color3.fromRGB(255, 255, 255), Size = UDim2.new(0, 14, 0, 14), Position = state and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)})
+                    Create("UICorner", {Parent = Knob, CornerRadius = UDim.new(1, 0)})
+                    local function internalSet(val)
+                        state = val
+                        Tween(Lever, {BackgroundColor3 = state and AccentColor or Color3.fromRGB(30, 40, 60)}, 0.3)
+                        Tween(Knob, {Position = state and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)}, 0.3)
+                        if callback then callback(state) end
+                    end
+                    Lever.MouseButton1Click:Connect(function() internalSet(not state) end)
+                    AddInfoIcon(TogFrame, UDim2.new(1, -70, 0.5, -8), infoData)
+                    Window.ConfigElements[name] = {Set = internalSet, Get = function() return state end}
+                end
+
+                function Elements:AddSlider(name, min, max, default, callback, infoData)
+                    local val = default or min
+                    local SliFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 45)})
+                    Create("TextLabel", {Parent = SliFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 15), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+                    local ValTxt = Create("TextLabel", {Parent = SliFrame, Text = tostring(val), Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 0, 15), Position = UDim2.new(1, -40, 0, 0), TextXAlignment = Enum.TextXAlignment.Right})
+                    local TrackBase = Create("Frame", {Parent = SliFrame, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 6), Position = UDim2.new(0, 10, 0, 25)})
+                    Create("UICorner", {Parent = TrackBase, CornerRadius = UDim.new(1, 0)})
+                    Create("UIStroke", {Parent = TrackBase, Color = Color3.fromRGB(30, 50, 80), Thickness = 1})
+                    local Fill = Create("Frame", {Parent = TrackBase, BackgroundColor3 = AccentColor, Size = UDim2.new((val-min)/(max-min), 0, 1, 0)})
+                    Create("UICorner", {Parent = Fill, CornerRadius = UDim.new(1, 0)})
+                    local Knob = Create("Frame", {Parent = Fill, BackgroundColor3 = Color3.fromRGB(255, 255, 255), Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(1, -6, 0.5, -6)})
+                    Create("UICorner", {Parent = Knob, CornerRadius = UDim.new(1, 0)})
+                    local function internalSet(v)
+                        val = math.clamp(v, min, max)
+                        ValTxt.Text = tostring(val)
+                        Tween(Fill, {Size = UDim2.new((val-min)/(max-min), 0, 1, 0)}, 0.1)
+                        if callback then callback(val) end
+                    end
+                    local dragging = false
+                    local function Update(input)
+                        local pos = math.clamp((input.Position.X - TrackBase.AbsolutePosition.X) / TrackBase.AbsoluteSize.X, 0, 1)
+                        internalSet(math.floor(min + ((max - min) * pos)))
+                    end
+                    Knob.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end end)
+                    UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
+                    UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then Update(input) end end)
+                    AddInfoIcon(SliFrame, UDim2.new(1, -65, 0, 0), infoData)
+                    Window.ConfigElements[name] = {Set = internalSet, Get = function() return val end}
+                end
+
+                function Elements:AddDropdown(name, options, isMulti, callback, infoData)
+                    local selected = isMulti and {} or (options[1] or nil)
+                    local dropped = false
+                    local optionButtons = {}
+                    -- UNLIMITED DROPDOWN FIX: No maxVisible cap
+                    local listHeight = math.min(#options * 25, 200)
+                    local dropOpenHeight = 50 + 32 + listHeight
+
+                    local DropFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 50), ClipsDescendants = true})
+                    Create("TextLabel", {Parent = DropFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 15), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+                    local MainBtn = Create("TextButton", {Parent = DropFrame, Text = isMulti and "Select Options..." or "Select...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 20), AutoButtonColor = false, TextXAlignment = Enum.TextXAlignment.Left})
+                    Create("UIPadding", {Parent = MainBtn, PaddingLeft = UDim.new(0, 8)})
+                    Create("UICorner", {Parent = MainBtn, CornerRadius = UDim.new(0, 4)})
+                    Create("UIStroke", {Parent = MainBtn, Color = Color3.fromRGB(30, 50, 80), Thickness = 1})
+                    AddBounce(MainBtn, 0.98)
+                    local Arrow = Create("TextLabel", {Parent = MainBtn, Text = "▼", Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 20, 1, 0), Position = UDim2.new(1, -28, 0, 0)})
+
+                    local SearchBox = Create("TextBox", {Parent = DropFrame, PlaceholderText = "Search...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(10, 12, 18), Size = UDim2.new(1, -20, 0, 24), Position = UDim2.new(0, 10, 0, 50), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, Visible = false})
+                    Create("UIPadding", {Parent = SearchBox, PaddingLeft = UDim.new(0, 8)})
+                    Create("UICorner", {Parent = SearchBox, CornerRadius = UDim.new(0, 4)})
+                    Create("UIStroke", {Parent = SearchBox, Color = Color3.fromRGB(30, 50, 80), Thickness = 1})
+
+                    local ListFrame = Create("ScrollingFrame", {Parent = DropFrame, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, listHeight), Position = UDim2.new(0, 10, 0, 78), CanvasSize = UDim2.new(0, 0, 0, #options * 25), ScrollBarThickness = 2, ScrollBarImageColor3 = Color3.fromRGB(60, 80, 120), BorderSizePixel = 0})
+                    Create("UICorner", {Parent = ListFrame, CornerRadius = UDim.new(0, 4)})
+                    local DList = Create("UIListLayout", {Parent = ListFrame, SortOrder = Enum.SortOrder.LayoutOrder})
+
+                    local function UpdateText()
+                        if isMulti then
+                            local txt = ""
+                            for _, v in pairs(selected) do txt = txt .. v .. ", " end
+                            MainBtn.Text = txt == "" and "Select Options..." or txt:sub(1, -3)
+                        else MainBtn.Text = selected or "Select..." end
+                    end
+
+                    local function internalSet(v)
+                        selected = v; UpdateText()
+                        for _, btn in ipairs(optionButtons) do
+                            local isSel = false
+                            if isMulti then isSel = table.find(selected, btn.Text) ~= nil
+                            else isSel = (selected == btn.Text) end
+                            Tween(btn, {TextColor3 = isSel and TextColor or SubTextColor}, 0.2)
+                            Tween(btn:FindFirstChild("Check"), {Size = isSel and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 0, 1, 0)}, 0.2)
+                        end
+                        if callback then callback(selected) end
+                    end
+
+                    for _, opt in pairs(options) do
+                        local isInitialSelected = (not isMulti and selected == opt)
+                        local OptBtn = Create("TextButton", {Parent = ListFrame, Text = opt, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = isInitialSelected and TextColor or SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 25), AutoButtonColor = false})
+                        local Check = Create("Frame", {Parent = OptBtn, Name = "Check", BackgroundColor3 = AccentColor, Size = isInitialSelected and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 0, 1, 0), BackgroundTransparency = 0.8})
+                        table.insert(optionButtons, OptBtn)
+                        OptBtn.MouseButton1Click:Connect(function()
+                            if isMulti then
+                                if table.find(selected, opt) then table.remove(selected, table.find(selected, opt))
+                                else table.insert(selected, opt) end
+                                internalSet(selected)
+                            else
+                                internalSet(opt); dropped = false
+                                Tween(Arrow, {Rotation = 0}, 0.3)
+                                Tween(DropFrame, {Size = UDim2.new(1, 0, 0, 50)}, 0.3)
+                                SearchBox.Visible = false
+                            end
+                        end)
+                    end
+                    UpdateText()
+
+                    SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+                        local q = SearchBox.Text:lower()
+                        for _, btn in ipairs(optionButtons) do
+                            if q == "" or string.find(btn.Text:lower(), q) then btn.Visible = true else btn.Visible = false end
+                        end
+                    end)
+
+                    DList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                        ListFrame.CanvasSize = UDim2.new(0, 0, 0, DList.AbsoluteContentSize.Y)
+                        if dropped then
+                            local dynamicHeight = math.min(DList.AbsoluteContentSize.Y, 200)
+                            local newOpenHeight = 50 + 32 + dynamicHeight
+                            ListFrame.Size = UDim2.new(1, -20, 0, dynamicHeight)
+                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, newOpenHeight)}, 0.1)
+                        end
+                    end)
+
+                    MainBtn.MouseButton1Click:Connect(function()
+                        dropped = not dropped
+                        if dropped then
+                            SearchBox.Visible = true; SearchBox.Text = ""
+                            Tween(Arrow, {Rotation = 180}, 0.3)
+                            local dynamicHeight = math.min(DList.AbsoluteContentSize.Y, 200)
+                            local newOpenHeight = 50 + 32 + dynamicHeight
+                            ListFrame.Size = UDim2.new(1, -20, 0, dynamicHeight)
+                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, newOpenHeight)}, 0.3)
+                        else
+                            SearchBox.Visible = false
+                            Tween(Arrow, {Rotation = 0}, 0.3)
+                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, 50)}, 0.3)
+                        end
+                    end)
+                    AddInfoIcon(DropFrame, UDim2.new(1, -25, 0, 0), infoData)
+                    Window.ConfigElements[name] = {Set = internalSet, Get = function() return selected end}
+                end
+
+                function Elements:AddTextbox(name, placeholder, callback, infoData)
+                    local TxtFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 50)})
+                    Create("TextLabel", {Parent = TxtFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 15), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+                    local Input = Create("TextBox", {Parent = TxtFrame, PlaceholderText = placeholder or "Type here...", Text = "", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
+                    Create("UIPadding", {Parent = Input, PaddingLeft = UDim.new(0, 8)})
+                    Create("UICorner", {Parent = Input, CornerRadius = UDim.new(0, 4)})
+                    local Stroke = Create("UIStroke", {Parent = Input, Color = Color3.fromRGB(30, 50, 80), Thickness = 1})
+                    local function internalSet(v) Input.Text = tostring(v); if callback then callback(v) end end
+                    Input.FocusLost:Connect(function(enterPressed) internalSet(Input.Text) end)
+                    AddInfoIcon(TxtFrame, UDim2.new(1, -25, 0, 0), infoData)
+                    Window.ConfigElements[name] = {Set = internalSet, Get = function() return Input.Text end}
+                end
+
+                function Elements:AddLabel(text)
+                    Create("TextLabel", {Parent = ItemContainer, Text = text, Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 18), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true})
+                end
+
+                return Elements
+            end
+            return PageObj
+        end
+
+        if isDefault then
+            TabBtn.BackgroundTransparency = 0
+            Indicator.Size = UDim2.new(0, 3, 0, 18)
+            Txt.TextColor3 = TextColor
+            TabContent.Visible = true
+            Window.CurrentTab = TabConfig
+        end
+        return TabConfig
+    end
+    return Window
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 3: SERVICES (FIXED: NO TRAILING SPACES)                   ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
 local Players           = game:GetService("Players")
 local RunService        = game:GetService("RunService")
@@ -86,6 +752,7 @@ local TeleportService   = game:GetService("TeleportService")
 local StarterGui        = game:GetService("StarterGui")
 local player            = Players.LocalPlayer
 
+-- POST-DEFINITION INTEGRITY CHECK
 pcall(function()
     if not Players then _EXO_INTEGRITY = false end
     if not RunService then _EXO_INTEGRITY = false end
@@ -94,15 +761,14 @@ end)
 if not _EXO_INTEGRITY then return end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 4: ENCODED CONSTANTS                                      ║
+-- ║  SECTION 4: ENCODED CONSTANTS (ANTI-THEFT)                        ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
-local HUB_KEY_RAW  = string.char(69,88,79,83,84,65,75,69,79,86,69,82,82,56,36)
-local HUB_KEY      = _exo_decode(_exo_encode(HUB_KEY_RAW))
-local KEY_FILE     = "exo_v8_k.dat"
-local CONFIG_FILE  = "exo_v8_cfg.dat"
-local LOG_FILE     = "exo_v8_logs.dat"
-local AI_FILE      = "exo_v8_ai.dat"
-local PROFILE_FILE = "exo_v8_profiles.dat"
+local HUB_KEY_RAW = string.char(69,88,79,83,84,65,75,69,79,86,69,82,82,56,36)
+local HUB_KEY = _exo_decode(_exo_encode(HUB_KEY_RAW))
+local KEY_FILE = "exo_v8_k.dat"
+local CONFIG_FILE = "exo_v8_cfg.dat"
+local LOG_FILE = "exo_v8_logs.dat"
+local AI_PROFILE_FILE = "exo_v8_ai_profiles.dat"
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
 -- ║  SECTION 5: FILE I/O ENGINE                                        ║
@@ -141,10 +807,9 @@ local function appendLog(entry)
 end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 6: STATE VARIABLES (1000x EXPANDED)                       ║
+-- ║  SECTION 6: STATE VARIABLES (GODLY TIER + AI EXPANDED)             ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
-
--- Core Combat
+-- Core Combat State
 local DAMAGE_REMOTE       = nil
 local DAMAGE_REMOTE_ALT   = nil
 local DAMAGE_REMOTE_TERT  = nil
@@ -167,7 +832,7 @@ local claimConn           = nil
 local buildConn           = nil
 local cachedTycoonType    = nil
 
--- Anti-Aura (1000x)
+-- GODLY Anti-Aura State (ALL ORIGINAL FIELDS PRESERVED)
 local AntiAura            = {
     Enabled = false, GodMode = false, Repel = false,
     Reflect = false, Phase = false, HealAura = false,
@@ -175,8 +840,9 @@ local AntiAura            = {
 }
 local antiAuraConn        = nil
 local antiAuraFF          = nil
+local antiAuraPhaseConn   = nil
 
--- Threat Detection (1000x multi-layer)
+-- Threat Detection (GODLY – multi-layer)
 local ThreatLevel         = 0
 local LastThreatCheck     = 0
 local ThreatRadius        = 60
@@ -187,7 +853,7 @@ local ThreatDecay         = 0
 local PeakThreat          = 0
 local ThreatVelocity      = {}
 
--- Insta-Kill (1000x)
+-- GODLY Insta-Kill State
 local InstaKillEnabled    = false
 local InstaKillConn       = nil
 local IK_ToolsCache       = {}
@@ -200,7 +866,7 @@ local IK_ParallelFire     = true
 local IK_SweepAngle       = 360
 local IK_PenetrationDepth = 3
 
--- Hit Amplifier (1000x)
+-- GODLY Hit Amplifier State
 local HitAmpEnabled       = false
 local HitAmpConn          = nil
 local HA_CachedTools      = {}
@@ -212,14 +878,14 @@ local HA_MultiPulse       = true
 local HA_SweepMode        = true
 local HA_PulseInterval    = 0.008
 
--- Tool Grabber (1000x)
+-- GODLY Tool Grabber State
 local TG_Enabled          = false
 local TG_padsByBase       = {}
 local TG_registered       = {}
 local TG_WavePriority     = true
 local TG_BurstCount       = 12
 
--- Kill Intelligence (1000x)
+-- Kill Intelligence System (EXPANDED)
 local KillNotifEnabled    = false
 local KillLogEnabled      = false
 local KillLogs            = {}
@@ -229,21 +895,23 @@ local DeathCount          = 0
 local LastDeathTime       = 0
 local DeathTimestamps     = {}
 local KillVelocity        = {}
+local LastSpawnTime       = 0
 
 -- ESP & Visuals
 local ESPEnabled          = false
 local AntiLagEnabled      = false
 local espDots             = {}
 local espGui              = nil
+
+-- No Cooldown (SAFE – no global hooks)
 local NoCooldownConn      = nil
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
 -- ║  SECTION 7: SENTINEL AI – CORE DATA STRUCTURES                     ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
-
 -- AI State Machine
 local AI_State = {
-    Current = "IDLE",           -- IDLE, ANALYZING, FORMULATING, PRESENTING, AWAITING_CONFIRM, EXECUTING
+    Current = "IDLE",
     LastTransition = 0,
     PendingAction = nil,
     PendingStrategy = nil,
@@ -251,21 +919,7 @@ local AI_State = {
 }
 
 -- Threat Profiler – persistent per-player profiles
-local ThreatProfiles = readJSON(PROFILE_FILE) or {}
--- Structure per player:
--- {
---   Name = "PlayerName",
---   TotalKills = 0,
---   AvgDistance = 0,
---   AvgTTK = 0,
---   Weapons = {},
---   SuspectedFeatures = {},   -- {"LoopBring","KillAura","Reach","FastKill","RemoteSpam"}
---   Confidence = {},          -- per-feature confidence 0-100
---   LastSeen = 0,
---   EngagementHistory = {},
---   CounterHistory = {},
---   ThreatScore = 0,
--- }
+local ThreatProfiles = readJSON(AI_PROFILE_FILE) or {}
 
 -- Strategy Engine
 local StrategyEngine = {
@@ -298,7 +952,7 @@ local ChatSystem = {
 
 -- Robot Animation State
 local RobotAnim = {
-    State = "IDLE",  -- IDLE, READING, THINKING, THUMBSUP, TALKING
+    State = "IDLE",
     Frame = 0,
     Eyes = nil,
     Body = nil,
@@ -306,7 +960,7 @@ local RobotAnim = {
 }
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 8: PRE-ALLOCATED BUFFERS                                  ║
+-- ║  SECTION 8: PRE-ALLOCATED BUFFERS (ZERO GC PRESSURE)              ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
 local _buf_parts      = {}
 local _buf_buttons    = {}
@@ -318,10 +972,11 @@ local _buf_remotes    = {}
 local _buf_analysis   = {}
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 9: DEFERRED HEAVY SCANS                                   ║
+-- ║  SECTION 9: DEFERRED HEAVY SCANS (NON-BLOCKING)                   ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
 local scansComplete = false
 task.spawn(function()
+    -- Damage remote detection (multi-pass for GODLY coverage)
     table.clear(_buf_remotes)
     for _, container in ipairs({ReplicatedStorage, workspace}) do
         pcall(function()
@@ -345,6 +1000,7 @@ task.spawn(function()
         if #_buf_remotes > 2 then DAMAGE_REMOTE_TERT = _buf_remotes[3] end
     end
 
+    -- Pad registration (GODLY – scans all bases)
     local TycoonsFolder = workspace:FindFirstChild("Tycoons")
     if TycoonsFolder then
         pcall(function()
@@ -378,6 +1034,7 @@ local function getPlayerTycoonType()
         and workspace.Tycoons:FindFirstChild(cachedTycoonType) then
         return cachedTycoonType
     end
+
     local plot = workspace:FindFirstChild(player.Name)
     if plot then
         for _, child in ipairs(plot:GetChildren()) do
@@ -390,6 +1047,7 @@ local function getPlayerTycoonType()
             end
         end
     end
+
     local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if root then
         local closest, minDist = nil, math.huge
@@ -558,6 +1216,78 @@ local function AI_GetOrCreateProfile(killerName)
     return ThreatProfiles[killerName]
 end
 
+local function AI_DetectFeatures(killData, profile)
+    local features = {}
+
+    -- LOOPBRING DETECTION
+    if killData.TTK < 0.3 and killData.Distance < 8 then
+        features["LoopBring"] = 85
+        if profile.TotalKills > 2 and profile.AvgTTK < 0.4 then
+            features["LoopBring"] = 95
+        end
+    end
+
+    -- KILL AURA DETECTION
+    if killData.Distance > 5 and killData.Distance < 15 and killData.TTK < 0.5 then
+        features["KillAura"] = 75
+        if killData.Weapon == "Unknown" then
+            features["KillAura"] = 90
+        end
+    end
+
+    -- REACH DETECTION
+    if killData.Distance > 25 then
+        features["Reach"] = 80
+        if killData.Distance > 40 then
+            features["Reach"] = 95
+        end
+    end
+
+    -- FAST KILL / REMOTE SPAM
+    if killData.TTK < 0.2 then
+        features["FastKill"] = 85
+        features["RemoteSpam"] = 70
+    end
+
+    -- FIGHT EVENT ABUSE
+    if killData.Weapon == "Unknown" and killData.TTK < 0.5 then
+        features["FightEventAbuse"] = 80
+    end
+
+    -- HIT AMPLIFIER
+    if killData.Distance > 15 and killData.Distance <= 30 and killData.TTK < 0.8 then
+        features["HitAmplifier"] = 70
+    end
+
+    -- TOOL FOLLOW
+    if killData.Distance < 3 and profile.TotalKills > 3 then
+        features["ToolFollow"] = 75
+    end
+
+    -- SPAWN KILL
+    if killData.TimeSinceRespawn and killData.TimeSinceRespawn < 2 then
+        features["SpawnKill"] = 90
+    end
+
+    return features
+end
+
+local function AI_CalculateThreatScore(profile)
+    local score = 0
+    score = score + math.min(profile.TotalKills * 2, 20)
+    score = score + math.min(profile.ThreatScore, 10)
+
+    for feature, confidence in pairs(profile.Confidence) do
+        score = score + math.floor(confidence / 20)
+    end
+
+    if profile.AvgTTK < 0.3 then score = score + 10 end
+    if profile.AvgDistance > 30 then score = score + 8 end
+    if profile.TotalKills > 5 then score = score + 5 end
+
+    return math.clamp(score, 0, 100)
+end
+
 local function AI_UpdateProfile(killerName, killData)
     local profile = AI_GetOrCreateProfile(killerName)
     profile.TotalKills = profile.TotalKills + 1
@@ -603,80 +1333,8 @@ local function AI_UpdateProfile(killerName, killData)
     profile.ThreatScore = AI_CalculateThreatScore(profile)
 
     -- Persist
-    writeJSON(PROFILE_FILE, ThreatProfiles)
+    writeJSON(AI_PROFILE_FILE, ThreatProfiles)
     return profile
-end
-
-local function AI_DetectFeatures(killData, profile)
-    local features = {}
-
-    -- LOOPBRING DETECTION: Extremely fast TTK + close range + repeated
-    if killData.TTK < 0.3 and killData.Distance < 8 then
-        features["LoopBring"] = 85
-        if profile.TotalKills > 2 and profile.AvgTTK < 0.4 then
-            features["LoopBring"] = 95
-        end
-    end
-
-    -- KILL AURA DETECTION: Multiple rapid kills, medium range, no visible weapon swing
-    if killData.Distance > 5 and killData.Distance < 15 and killData.TTK < 0.5 then
-        features["KillAura"] = 75
-        if killData.Weapon == "Unknown" then
-            features["KillAura"] = 90
-        end
-    end
-
-    -- REACH DETECTION: Kills from impossible distance
-    if killData.Distance > 25 then
-        features["Reach"] = 80
-        if killData.Distance > 40 then
-            features["Reach"] = 95
-        end
-    end
-
-    -- FAST KILL / REMOTE SPAM: Very fast TTK regardless of distance
-    if killData.TTK < 0.2 then
-        features["FastKill"] = 85
-        features["RemoteSpam"] = 70
-    end
-
-    -- FIGHT EVENT ABUSE: No weapon detected, fast kills
-    if killData.Weapon == "Unknown" and killData.TTK < 0.5 then
-        features["FightEventAbuse"] = 80
-    end
-
-    -- HIT AMPLIFIER: Medium range, consistent TTK
-    if killData.Distance > 15 and killData.Distance <= 30 and killData.TTK < 0.8 then
-        features["HitAmplifier"] = 70
-    end
-
-    -- TOOL FOLLOW: Very close, persistent kills
-    if killData.Distance < 3 and profile.TotalKills > 3 then
-        features["ToolFollow"] = 75
-    end
-
-    -- SPAWN KILL: Kills happening very shortly after your respawn
-    if killData.TimeSinceRespawn and killData.TimeSinceRespawn < 2 then
-        features["SpawnKill"] = 90
-    end
-
-    return features
-end
-
-local function AI_CalculateThreatScore(profile)
-    local score = 0
-    score = score + math.min(profile.TotalKills * 2, 20)
-    score = score + math.min(profile.ThreatScore, 10)
-
-    for feature, confidence in pairs(profile.Confidence) do
-        score = score + math.floor(confidence / 20)
-    end
-
-    if profile.AvgTTK < 0.3 then score = score + 10 end
-    if profile.AvgDistance > 30 then score = score + 8 end
-    if profile.TotalKills > 5 then score = score + 5 end
-
-    return math.clamp(score, 0, 100)
 end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
@@ -867,7 +1525,7 @@ local function AI_ExecuteStrategy(strategy)
                 end
 
             elseif action.type == "disable" then
-                -- For future use: disabling features that are counterproductive
+                -- Reserved for future adaptive disabling
             end
         end)
     end
@@ -903,14 +1561,14 @@ local function Chat_CreateGUI()
     mainFrame.Name = "ChatMain"
     mainFrame.Size = UDim2.new(0, 380, 0, 460)
     mainFrame.Position = UDim2.new(1, -400, 0.5, -230)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
     mainFrame.Parent = gui
     Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(0, 150, 255)
+    stroke.Color = AccentColor
     stroke.Thickness = 2
     stroke.Parent = mainFrame
 
@@ -918,7 +1576,7 @@ local function Chat_CreateGUI()
     local titleBar = Instance.new("Frame")
     titleBar.Name = "TitleBar"
     titleBar.Size = UDim2.new(1, 0, 0, 36)
-    titleBar.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+    titleBar.BackgroundColor3 = Color3.fromRGB(16, 20, 30)
     titleBar.BorderSizePixel = 0
     titleBar.Parent = mainFrame
     Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 12)
@@ -928,7 +1586,7 @@ local function Chat_CreateGUI()
     titleLabel.Position = UDim2.new(0, 40, 0, 0)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = "EXO SENTINEL AI"
-    titleLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+    titleLabel.TextColor3 = AccentColor
     titleLabel.TextSize = 14
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -950,7 +1608,7 @@ local function Chat_CreateGUI()
     minBtn.Position = UDim2.new(1, -30, 0.5, -12)
     minBtn.BackgroundTransparency = 1
     minBtn.Text = "—"
-    minBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    minBtn.TextColor3 = SubTextColor
     minBtn.TextSize = 16
     minBtn.Font = Enum.Font.GothamBold
     minBtn.Parent = titleBar
@@ -960,16 +1618,16 @@ local function Chat_CreateGUI()
     robotArea.Name = "RobotArea"
     robotArea.Size = UDim2.new(1, 0, 0, 80)
     robotArea.Position = UDim2.new(0, 0, 0, 36)
-    robotArea.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
+    robotArea.BackgroundColor3 = Color3.fromRGB(8, 10, 16)
     robotArea.BorderSizePixel = 0
     robotArea.Parent = mainFrame
 
-    -- Robot body (simple geometric robot)
+    -- Robot body
     local robotBody = Instance.new("Frame")
     robotBody.Name = "RobotBody"
     robotBody.Size = UDim2.new(0, 40, 0, 40)
     robotBody.Position = UDim2.new(0, 15, 0.5, -20)
-    robotBody.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    robotBody.BackgroundColor3 = AccentColor
     robotBody.BorderSizePixel = 0
     robotBody.Parent = robotArea
     Instance.new("UICorner", robotBody).CornerRadius = UDim.new(0, 8)
@@ -1023,7 +1681,7 @@ local function Chat_CreateGUI()
     robotStatus.Position = UDim2.new(0, 70, 0, 10)
     robotStatus.BackgroundTransparency = 1
     robotStatus.Text = "SENTINEL ONLINE\nAwaiting combat data..."
-    robotStatus.TextColor3 = Color3.fromRGB(0, 200, 255)
+    robotStatus.TextColor3 = AccentColor
     robotStatus.TextSize = 11
     robotStatus.Font = Enum.Font.Gotham
     robotStatus.TextXAlignment = Enum.TextXAlignment.Left
@@ -1039,7 +1697,7 @@ local function Chat_CreateGUI()
     scrollFrame.Position = UDim2.new(0, 5, 0, 118)
     scrollFrame.BackgroundTransparency = 1
     scrollFrame.ScrollBarThickness = 4
-    scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
+    scrollFrame.ScrollBarImageColor3 = AccentColor
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
     scrollFrame.Parent = mainFrame
@@ -1056,7 +1714,7 @@ local function Chat_CreateGUI()
     inputArea.Name = "InputArea"
     inputArea.Size = UDim2.new(1, -10, 0, 32)
     inputArea.Position = UDim2.new(0, 5, 1, -38)
-    inputArea.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    inputArea.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
     inputArea.BorderSizePixel = 0
     inputArea.Parent = mainFrame
     Instance.new("UICorner", inputArea).CornerRadius = UDim.new(0, 8)
@@ -1067,9 +1725,9 @@ local function Chat_CreateGUI()
     inputBox.Position = UDim2.new(0, 5, 0, 2)
     inputBox.BackgroundTransparency = 1
     inputBox.PlaceholderText = "Type a message..."
-    inputBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 120)
+    inputBox.PlaceholderColor3 = SubTextColor
     inputBox.Text = ""
-    inputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    inputBox.TextColor3 = TextColor
     inputBox.TextSize = 12
     inputBox.Font = Enum.Font.Gotham
     inputBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -1080,7 +1738,7 @@ local function Chat_CreateGUI()
     sendBtn.Name = "SendBtn"
     sendBtn.Size = UDim2.new(0, 32, 0, 24)
     sendBtn.Position = UDim2.new(1, -37, 0.5, -12)
-    sendBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    sendBtn.BackgroundColor3 = AccentColor
     sendBtn.Text = "▶"
     sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     sendBtn.TextSize = 12
@@ -1094,7 +1752,7 @@ local function Chat_CreateGUI()
 
     -- Drag functionality
     titleBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             ChatSystem.Dragging = true
             ChatSystem.DragStart = input.Position
             ChatSystem.StartPos = mainFrame.Position
@@ -1102,13 +1760,13 @@ local function Chat_CreateGUI()
     end)
 
     titleBar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             ChatSystem.Dragging = false
         end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if ChatSystem.Dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if ChatSystem.Dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - ChatSystem.DragStart
             mainFrame.Position = UDim2.new(
                 ChatSystem.StartPos.X.Scale, ChatSystem.StartPos.X.Offset + delta.X,
@@ -1158,7 +1816,7 @@ local function Chat_CreateGUI()
 end
 
 -- Add a message to the chat
-local function Chat_AddMessage(sender, text, color)
+function Chat_AddMessage(sender, text, color)
     if not ChatSystem.ScrollFrame then return end
 
     ChatSystem.MessageCount = ChatSystem.MessageCount + 1
@@ -1183,17 +1841,17 @@ local function Chat_AddMessage(sender, text, color)
     msgLabel.Parent = msgFrame
 
     local prefix = ""
-    local textColor = color or Color3.fromRGB(200, 200, 200)
+    local textColor = color or TextColor
 
     if sender == "AI" then
         prefix = "[SENTINEL] "
-        textColor = color or Color3.fromRGB(0, 200, 255)
+        textColor = color or AccentColor
     elseif sender == "USER" then
         prefix = "[YOU] "
         textColor = color or Color3.fromRGB(255, 255, 100)
     elseif sender == "SYSTEM" then
         prefix = "[SYSTEM] "
-        textColor = color or Color3.fromRGB(255, 100, 100)
+        textColor = color or Color3.fromRGB(255, 80, 80)
     end
 
     msgLabel.Text = prefix .. text
@@ -1214,7 +1872,6 @@ local function Robot_SetState(state)
 
     if state == "READING" then
         ChatSystem.StatusLabel.Text = "ANALYZING KILL REPORT...\nScanning threat patterns..."
-        -- Blink eyes animation
         task.spawn(function()
             for i = 1, 3 do
                 if RobotAnim.Eyes then
@@ -1242,7 +1899,6 @@ local function Robot_SetState(state)
 
     elseif state == "THUMBSUP" then
         ChatSystem.StatusLabel.Text = "ANALYSIS COMPLETE ✓\nStrategy ready. Opening chat..."
-        -- Thumbs up animation
         if RobotAnim.Arm then
             TweenService:Create(RobotAnim.Arm, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
                 Position = UDim2.new(1, 2, 0, -5),
@@ -1916,7 +2572,7 @@ local function applyReach()
                 if not reachHL[part] then
                     local hl = Instance.new("Highlight", part)
                     hl.FillTransparency = 1
-                    hl.OutlineColor = Color3.fromRGB(0, 150, 255)
+                    hl.OutlineColor = AccentColor
                     reachHL[part] = hl
                 end
             end
@@ -2246,8 +2902,6 @@ end
 -- ╔══════════════════════════════════════════════════════════════════════╗
 -- ║  SECTION 27: 1000x KILL INTELLIGENCE (FULL BEHAVIORAL ANALYSIS)   ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
-local LastSpawnTime = 0
-
 local function analyzeKill(killer, weaponName, distance, ttk)
     local suspected = {}
     local counter = {}
@@ -2383,16 +3037,15 @@ local function setupKillNotifications()
             -- ═══ TRIGGER SENTINEL AI PIPELINE ═══
             AI_OnKillDetected(analysis)
 
-            -- Also send a WindUI notification
-            WindUI:Notify({
+            -- Also send a ZyronX notification
+            Library:Notify({
                 Title = "SENTINEL AI - Kill Detected (Threat " .. analysis.Threat .. "/10)",
-                Content = "Killer: " .. analysis.Killer
+                Description = "Killer: " .. analysis.Killer
                     .. "\nWeapon: " .. analysis.Weapon
                     .. "\nDist: " .. analysis.Distance .. " studs | TTK: " .. string.format("%.2f", analysis.TTK) .. "s"
                     .. "\nSuspected: " .. table.concat(analysis.Suspected, ", ")
                     .. "\nAI analyzing... check chat.",
                 Duration = 6,
-                Icon = "alert-triangle",
             })
         end)
     end)
@@ -2428,7 +3081,7 @@ local function startESP()
         nameLabel.Position = UDim2.new(0, 0, 0, 10)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = plr.Name
-        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.TextColor3 = TextColor
         nameLabel.TextSize = 8
         nameLabel.Font = Enum.Font.Gotham
         nameLabel.Parent = container
@@ -2549,44 +3202,25 @@ local function stopNoCooldown()
 end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 31: BUILD WINDUI                                         ║
+-- ║  SECTION 31: BUILD ZYRONX UI (ALL TABS + SENTINEL AI TAB)         ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
-local Window = WindUI:CreateWindow({
-    Title = "EXO Hub",
-    Icon = "swords",
-    Author = "SENTINEL AI | v8.0 | 1000x",
-    Folder = "EXOHub",
-    Size = UDim2.fromOffset(680, 540),
-    Transparent = false,
-    Theme = "Default",
-    SideBarWidth = 180,
-    HasOutline = true,
+local Window = Library:CreateWindow({
+    Title = "EXO Hub v8.0",
+    Subtitle = "SENTINEL AI | BLUE EDITION",
+    SubtitleColor = AccentColor,
+    SphereText = true,
+    SphereWords = "EXO",
 })
-
-Window:EditOpenButton({
-    Enabled = true,
-    Image = "swords",
-    Title = "E",
-    CornerRadius = UDim.new(1, 0),
-    StrokeThickness = 2,
-    Side = "Left",
-})
-
-local SPT_Combat_Tab   = Window:Tab({Title = "SPT Combat", Icon = "swords"})
-local SPT_Tycoon_Tab   = Window:Tab({Title = "SPT Tycoon", Icon = "building-2"})
-local SPT_Misc_Tab     = Window:Tab({Title = "SPT Misc", Icon = "move"})
-local MPT_Kill_Tab     = Window:Tab({Title = "MPT Kill", Icon = "skull"})
-local MPT_Economy_Tab  = Window:Tab({Title = "MPT Economy", Icon = "crown"})
-local AI_Tab           = Window:Tab({Title = "Sentinel AI", Icon = "brain"})
-local Updates_Tab      = Window:Tab({Title = "Updates", Icon = "scroll-text"})
-local Settings_Tab     = Window:Tab({Title = "Settings", Icon = "settings"})
 
 -- ═══════════════════════════════════════════════════════════════════════
---  SPT COMBAT TAB (1000x)
+--  TAB 1: SPT COMBAT (1000x)
 -- ═══════════════════════════════════════════════════════════════════════
 do
-    local AuraSec = SPT_Combat_Tab:Section({Title = "1000x Multi-Target Aura"})
-    AuraSec:Toggle({Title = "Enable Aura", Default = false, Callback = function(state)
+    local CombatTab = Window:CreateTab("Combat", true)
+    local CombatPage = CombatTab:CreatePage("Main")
+
+    local AuraSec = CombatPage:CreateSection("1000x Multi-Target Aura")
+    AuraSec:AddToggle("Enable Aura", false, function(state)
         Aura.Enabled = state
         if state then
             Aura.TargetList = {}
@@ -2594,12 +3228,12 @@ do
                 if plr ~= player then table.insert(Aura.TargetList, plr) end
             end
             startAuraLoop()
-            WindUI:Notify({Title = "Aura", Content = "ENGAGED - " .. #Aura.TargetList .. " targets. Multi-vector prediction active.", Duration = 2, Icon = "swords"})
+            Library:Notify({Title = "Aura", Description = "ENGAGED - " .. #Aura.TargetList .. " targets. Multi-vector prediction active."})
         else stopAuraLoop() end
-    end})
-    AuraSec:Toggle({Title = "Instant Kill", Default = false, Callback = function(state) InstantKill = state end})
-    AuraSec:Slider({Title = "Prediction Depth", Min = 3, Max = 30, Default = 8, Callback = function(val) latencyEstimate = val / 100 end})
-    AuraSec:Dropdown({Title = "Aura Targets", Options = getServerPlayers(), MultiSelection = true, Callback = function(selected)
+    end)
+    AuraSec:AddToggle("Instant Kill", false, function(state) InstantKill = state end)
+    AuraSec:AddSlider("Prediction Depth", 3, 30, 8, function(val) latencyEstimate = val / 100 end)
+    AuraSec:AddDropdown("Aura Targets", getServerPlayers(), true, function(selected)
         table.clear(Aura.TargetList)
         if selected then
             for _, name in ipairs(selected) do
@@ -2607,10 +3241,10 @@ do
                 if plr then table.insert(Aura.TargetList, plr) end
             end
         end
-    end})
+    end)
 
-    local ToolFollowSec = SPT_Combat_Tab:Section({Title = "1000x Tool Follow"})
-    ToolFollowSec:Toggle({Title = "Enable Tool Follow", Default = false, Callback = function(state)
+    local ToolFollowSec = CombatPage:CreateSection("1000x Tool Follow")
+    ToolFollowSec:AddToggle("Enable Tool Follow", false, function(state)
         ToolFollow.Enabled = state
         if state then
             ToolFollow.Targets = {}
@@ -2619,20 +3253,20 @@ do
             end
             startToolFollow()
         else stopToolFollow() end
-    end})
+    end)
 
-    local DefenseSec = SPT_Combat_Tab:Section({Title = "1000x Defense / Anti-Aura"})
-    DefenseSec:Toggle({Title = "Enable Anti-Aura", Default = false, Callback = function(state)
+    local DefenseSec = CombatPage:CreateSection("1000x Defense / Anti-Aura")
+    DefenseSec:AddToggle("Enable Anti-Aura", false, function(state)
         AntiAura.Enabled = state
         if state then startAntiAura() else stopAntiAura() end
-    end})
-    DefenseSec:Toggle({Title = "God Mode (ForceField)", Default = false, Callback = function(state) AntiAura.GodMode = state end})
-    DefenseSec:Toggle({Title = "Repel (Anti-Touch)", Default = false, Callback = function(state) AntiAura.Repel = state end})
-    DefenseSec:Toggle({Title = "Phase (No Collide)", Default = false, Callback = function(state) AntiAura.Phase = state end})
-    DefenseSec:Toggle({Title = "Heal Aura", Default = false, Callback = function(state) AntiAura.HealAura = state end})
-    DefenseSec:Slider({Title = "Repel Force", Min = 50, Max = 300, Default = 120, Callback = function(val) AntiAura.RepelForce = val end})
-    DefenseSec:Slider({Title = "Repel Radius", Min = 8, Max = 30, Default = 18, Callback = function(val) AntiAura.RepelRadius = val end})
-    DefenseSec:Toggle({Title = "Anti Spawnkill", Default = false, Callback = function(state)
+    end)
+    DefenseSec:AddToggle("God Mode (ForceField)", false, function(state) AntiAura.GodMode = state end)
+    DefenseSec:AddToggle("Repel (Anti-Touch)", false, function(state) AntiAura.Repel = state end)
+    DefenseSec:AddToggle("Phase (No Collide)", false, function(state) AntiAura.Phase = state end)
+    DefenseSec:AddToggle("Heal Aura", false, function(state) AntiAura.HealAura = state end)
+    DefenseSec:AddSlider("Repel Force", 50, 300, 120, function(val) AntiAura.RepelForce = val end)
+    DefenseSec:AddSlider("Repel Radius", 8, 30, 18, function(val) AntiAura.RepelRadius = val end)
+    DefenseSec:AddToggle("Anti Spawnkill", false, function(state)
         AntiSpawnkill = state
         if state then
             player.CharacterAdded:Connect(function(c)
@@ -2645,23 +3279,26 @@ do
                 end)
             end)
         end
-    end})
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════
---  SPT TYCOON TAB (1000x)
+--  TAB 2: SPT TYCOON (1000x)
 -- ═══════════════════════════════════════════════════════════════════════
 do
-    local TycoonSec = SPT_Tycoon_Tab:Section({Title = "1000x Tycoon Automation"})
-    TycoonSec:Toggle({Title = "Auto Claim Money", Default = false, Callback = function(state)
+    local TycoonTab = Window:CreateTab("Tycoon")
+    local TycoonPage = TycoonTab:CreatePage("Automation")
+
+    local TycoonSec = TycoonPage:CreateSection("1000x Tycoon Automation")
+    TycoonSec:AddToggle("Auto Claim Money", false, function(state)
         AutoClaimMoney = state
         if state then startClaimMoney() else stopClaimMoney() end
-    end})
-    TycoonSec:Toggle({Title = "Smart Auto Build (Multi-Buy)", Default = false, Callback = function(state)
+    end)
+    TycoonSec:AddToggle("Smart Auto Build (Multi-Buy)", false, function(state)
         AutoBuild = state
         if state then startAutoBuild() else stopAutoBuild() end
-    end})
-    TycoonSec:Toggle({Title = "Auto Grab Weapons", Default = false, Callback = function(state)
+    end)
+    TycoonSec:AddToggle("Auto Grab Weapons", false, function(state)
         AutoGetTools = state
         if state then
             if grabLoopConn then grabLoopConn:Disconnect() end
@@ -2686,10 +3323,10 @@ do
         else
             if grabLoopConn then grabLoopConn:Disconnect(); grabLoopConn = nil end
         end
-    end})
+    end)
 
-    local CooldownSec = SPT_Tycoon_Tab:Section({Title = "Tools & Cooldown"})
-    CooldownSec:Toggle({Title = "Auto Use Tools (0 delay)", Default = false, Callback = function(state)
+    local CooldownSec = TycoonPage:CreateSection("Tools & Cooldown")
+    CooldownSec:AddToggle("Auto Use Tools (0 delay)", false, function(state)
         AutoTools = state
         if state then
             toolLoopConn = RunService.RenderStepped:Connect(function()
@@ -2706,53 +3343,59 @@ do
         else
             if toolLoopConn then toolLoopConn:Disconnect(); toolLoopConn = nil end
         end
-    end})
-    CooldownSec:Toggle({Title = "No Cooldown (SAFE)", Default = false, Callback = function(state)
+    end)
+    CooldownSec:AddToggle("No Cooldown (SAFE)", false, function(state)
         NoCooldown = state
         if state then startNoCooldown() else stopNoCooldown() end
-    end})
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════
---  SPT MISC TAB (1000x)
+--  TAB 3: SPT MISC (1000x)
 -- ═══════════════════════════════════════════════════════════════════════
 do
-    local ReachSec = SPT_Misc_Tab:Section({Title = "1000x Reach"})
-    ReachSec:Toggle({Title = "Enable Reach", Default = false, Callback = function(state)
+    local MiscTab = Window:CreateTab("Misc")
+    local MiscPage = MiscTab:CreatePage("Utilities")
+
+    local ReachSec = MiscPage:CreateSection("1000x Reach")
+    ReachSec:AddToggle("Enable Reach", false, function(state)
         Reach = state
         if state then applyReach() else stopReach() end
-    end})
-    ReachSec:Slider({Title = "Reach Size", Min = 1, Max = 15, Default = 3, Callback = function(val)
+    end)
+    ReachSec:AddSlider("Reach Size", 1, 15, 3, function(val)
         ReachSize = val
         if Reach then stopReach(); applyReach() end
-    end})
+    end)
 
-    local RespawnSec = SPT_Misc_Tab:Section({Title = "Respawn & Protection"})
-    RespawnSec:Toggle({Title = "Fast Respawn", Default = false, Callback = function(state)
+    local RespawnSec = MiscPage:CreateSection("Respawn & Protection")
+    RespawnSec:AddToggle("Fast Respawn", false, function(state)
         FastRespawn = state
         if state then startFastRespawn() end
-    end})
+    end)
 
-    local UtilsSec = SPT_Misc_Tab:Section({Title = "Utilities"})
-    UtilsSec:Textbox({Title = "Set Damage Remote", Placeholder = "game.ReplicatedStorage.DealDamage", Callback = function(text)
+    local UtilsSec = MiscPage:CreateSection("Remote Configuration")
+    UtilsSec:AddTextbox("Set Damage Remote", "game.ReplicatedStorage.DealDamage", function(text)
         if text and text ~= "" then
             local ok, remote = pcall(function() return loadstring("return " .. text)() end)
             if ok and remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
                 DAMAGE_REMOTE = remote
-                WindUI:Notify({Title = "Remote Set", Content = "Damage remote updated.", Duration = 3, Icon = "check"})
+                Library:Notify({Title = "Remote Set", Description = "Damage remote updated."})
             else
-                WindUI:Notify({Title = "Error", Content = "Invalid remote path.", Duration = 3, Icon = "x"})
+                Library:Notify({Title = "Error", Description = "Invalid remote path."})
             end
         end
-    end})
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════
---  MPT KILL TAB (1000x)
+--  TAB 4: MPT KILL ENGINE (1000x)
 -- ═══════════════════════════════════════════════════════════════════════
 do
-    local OmniSec = MPT_Kill_Tab:Section({Title = "1000x Omni-Kill Engine"})
-    OmniSec:Toggle({Title = "Enable Omni-Kill", Default = false, Callback = function(state)
+    local KillTab = Window:CreateTab("Kill Engine")
+    local KillPage = KillTab:CreatePage("Omni-Kill")
+
+    local OmniSec = KillPage:CreateSection("1000x Omni-Kill Engine")
+    OmniSec:AddToggle("Enable Omni-Kill", false, function(state)
         Aura.Enabled = state; InstantKill = state
         if state then
             Aura.TargetList = {}
@@ -2760,48 +3403,48 @@ do
                 if plr ~= player then table.insert(Aura.TargetList, plr) end
             end
             startAuraLoop()
-            WindUI:Notify({Title = "OMNI-KILL", Content = "ENGAGED - " .. #Aura.TargetList .. " targets.", Duration = 3, Icon = "skull"})
+            Library:Notify({Title = "OMNI-KILL", Description = "ENGAGED - " .. #Aura.TargetList .. " targets."})
         else stopAuraLoop() end
-    end})
-    OmniSec:Toggle({Title = "Insta-Kill Micro-Burst", Default = false, Callback = function(state)
+    end)
+    OmniSec:AddToggle("Insta-Kill Micro-Burst", false, function(state)
         InstaKillEnabled = state
         if state then startInstaKill() else stopInstaKill() end
-    end})
-    OmniSec:Toggle({Title = "Adaptive Burst (Threat-Based)", Default = true, Callback = function(state)
+    end)
+    OmniSec:AddToggle("Adaptive Burst (Threat-Based)", true, function(state)
         IK_AdaptiveBurst = state
-    end})
-    OmniSec:Slider({Title = "Prediction Aggression", Min = 3, Max = 30, Default = 8, Callback = function(val) latencyEstimate = val / 100 end})
-    OmniSec:Slider({Title = "Burst Count", Min = 3, Max = 20, Default = 12, Callback = function(val) IK_BurstCount = val end})
-    OmniSec:Button({Title = "Manual Kill Burst", Callback = function()
+    end)
+    OmniSec:AddSlider("Prediction Aggression", 3, 30, 8, function(val) latencyEstimate = val / 100 end)
+    OmniSec:AddSlider("Burst Count", 3, 20, 12, function(val) IK_BurstCount = val end)
+    OmniSec:AddButton("Manual Kill Burst", function()
         local orig = Aura.Enabled
         Aura.Enabled = true; InstantKill = true
         task.wait(0.15)
         Aura.Enabled = orig
         if not orig then InstantKill = false end
-        WindUI:Notify({Title = "Kill Burst", Content = "Burst fired.", Duration = 2, Icon = "zap"})
-    end})
-    OmniSec:Button({Title = "Refresh Target List", Callback = function()
+        Library:Notify({Title = "Kill Burst", Description = "Burst fired."})
+    end)
+    OmniSec:AddButton("Refresh Target List", function()
         table.clear(Aura.TargetList)
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= player then table.insert(Aura.TargetList, plr) end
         end
-        WindUI:Notify({Title = "Targets", Content = "Refreshed: " .. #Aura.TargetList .. " players.", Duration = 2, Icon = "refresh-cw"})
-    end})
+        Library:Notify({Title = "Targets", Description = "Refreshed: " .. #Aura.TargetList .. " players."})
+    end)
 
-    local HitAmpSec = MPT_Kill_Tab:Section({Title = "1000x Hit Amplifier"})
-    HitAmpSec:Toggle({Title = "Enable Hit Amplifier", Default = false, Callback = function(state)
+    local HitAmpSec = KillPage:CreateSection("1000x Hit Amplifier")
+    HitAmpSec:AddToggle("Enable Hit Amplifier", false, function(state)
         HitAmpEnabled = state
         if state then startHitAmplifier() else stopHitAmplifier() end
-    end})
-    HitAmpSec:Slider({Title = "Scan Range", Min = 15, Max = 60, Default = 45, Callback = function(val)
+    end)
+    HitAmpSec:AddSlider("Scan Range", 15, 60, 45, function(val)
         HA_Range = Vector3.new(val, val, val)
-    end})
-    HitAmpSec:Slider({Title = "Burst Count", Min = 1, Max = 15, Default = 8, Callback = function(val) HA_BurstCount = val end})
-    HitAmpSec:Toggle({Title = "Multi-Pulse (3x waves)", Default = true, Callback = function(state) HA_MultiPulse = state end})
-    HitAmpSec:Label({Title = "360 sphere+box scan | 8ms cooldown | OverlapParams"})
+    end)
+    HitAmpSec:AddSlider("Burst Count", 1, 15, 8, function(val) HA_BurstCount = val end)
+    HitAmpSec:AddToggle("Multi-Pulse (3x waves)", true, function(state) HA_MultiPulse = state end)
+    HitAmpSec:AddLabel("360 sphere+box scan | 6ms cooldown | OverlapParams")
 
-    local ArsenalSec = MPT_Kill_Tab:Section({Title = "1000x Tool Arsenal"})
-    ArsenalSec:Toggle({Title = "Enable Tool Arsenal", Default = false, Callback = function(state)
+    local ArsenalSec = KillPage:CreateSection("1000x Tool Arsenal")
+    ArsenalSec:AddToggle("Enable Tool Arsenal", false, function(state)
         TG_Enabled = state
         if state then
             if not getgenv().EXO_TG_Loop then
@@ -2831,8 +3474,8 @@ do
         else
             getgenv().EXO_TG_Loop = false
         end
-    end})
-    ArsenalSec:Button({Title = "Force Acquire All", Callback = function()
+    end)
+    ArsenalSec:AddButton("Force Acquire All", function()
         local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         if root then
             for baseName, _ in pairs(TG_padsByBase) do
@@ -2844,24 +3487,27 @@ do
                     end
                 end
             end
-            WindUI:Notify({Title = "Tool Arsenal", Content = "Force acquire burst fired.", Duration = 2, Icon = "package"})
+            Library:Notify({Title = "Tool Arsenal", Description = "Force acquire burst fired."})
         end
-    end})
-    ArsenalSec:Label({Title = "14 Bases: Stone, Magic, Storm, Robotic, Mecha, Shadow, Hyper, Thunder, Void, Frozen, Magma, Nuclear, Toxic, Kong"})
+    end)
+    ArsenalSec:AddLabel("14 Bases: Stone, Magic, Storm, Robotic, Mecha, Shadow, Hyper, Thunder, Void, Frozen, Magma, Nuclear, Toxic, Kong")
 end
 
 -- ═══════════════════════════════════════════════════════════════════════
---  MPT ECONOMY TAB (1000x)
+--  TAB 5: MPT ECONOMY (1000x)
 -- ═══════════════════════════════════════════════════════════════════════
 do
-    local SovSec = MPT_Economy_Tab:Section({Title = "1000x Tycoon Sovereign"})
-    SovSec:Toggle({Title = "Enable Sovereign Economy", Default = false, Callback = function(state)
+    local EconTab = Window:CreateTab("Economy")
+    local EconPage = EconTab:CreatePage("Sovereign")
+
+    local SovSec = EconPage:CreateSection("1000x Sovereign Economy")
+    SovSec:AddToggle("Enable Sovereign Economy", false, function(state)
         AutoClaimMoney = state; AutoBuild = state
         if state then startClaimMoney(); startAutoBuild()
         else stopClaimMoney(); stopAutoBuild() end
-    end})
-    SovSec:Slider({Title = "Defense Threat Radius", Min = 20, Max = 120, Default = 60, Callback = function(val) ThreatRadius = val end})
-    SovSec:Button({Title = "Force Buy Next Upgrade", Callback = function()
+    end)
+    SovSec:AddSlider("Defense Threat Radius", 20, 120, 60, function(val) ThreatRadius = val end)
+    SovSec:AddButton("Force Buy Next Upgrade", function()
         local myChar = player.Character
         if not myChar then return end
         local root = myChar:FindFirstChild("HumanoidRootPart")
@@ -2884,14 +3530,14 @@ do
                 pcall(firetouchinterest, root, part, 0)
                 pcall(firetouchinterest, root, part, 1)
             end
-            WindUI:Notify({Title = "Purchased", Content = "Bought: " .. best.Name, Duration = 2, Icon = "check"})
+            Library:Notify({Title = "Purchased", Description = "Bought: " .. best.Name})
         else
-            WindUI:Notify({Title = "No Purchase", Content = "Nothing affordable.", Duration = 2, Icon = "x"})
+            Library:Notify({Title = "No Purchase", Description = "Nothing affordable."})
         end
-    end})
+    end)
 
-    local SpawnSec = MPT_Economy_Tab:Section({Title = "Spawn Supremacy"})
-    SpawnSec:Toggle({Title = "Enable Supremacy Mode", Default = false, Callback = function(state)
+    local SpawnSec = EconPage:CreateSection("Spawn Supremacy")
+    SpawnSec:AddToggle("Supremacy Mode", false, function(state)
         AntiSpawnkill = state
         if state then
             player.CharacterAdded:Connect(function(c)
@@ -2904,163 +3550,133 @@ do
                 end)
             end)
         end
-    end})
-    SpawnSec:Toggle({Title = "Fast Respawn", Default = false, Callback = function(state)
+    end)
+    SpawnSec:AddToggle("Fast Respawn", false, function(state)
         FastRespawn = state
         if state then startFastRespawn() end
-    end})
+    end)
 
-    local DefSec = MPT_Economy_Tab:Section({Title = "1000x Defense Matrix"})
-    DefSec:Toggle({Title = "Enable Defense Matrix", Default = false, Callback = function(state)
+    local DefSec = EconPage:CreateSection("1000x Defense Matrix")
+    DefSec:AddToggle("Enable Defense Matrix", false, function(state)
         AntiAura.Enabled = state
         if state then startAntiAura() else stopAntiAura() end
-    end})
-    DefSec:Toggle({Title = "ForceField God Mode", Default = false, Callback = function(state) AntiAura.GodMode = state end})
-    DefSec:Toggle({Title = "Weapon Repel", Default = false, Callback = function(state) AntiAura.Repel = state end})
-    DefSec:Toggle({Title = "Phase Mode (No Collide)", Default = false, Callback = function(state) AntiAura.Phase = state end})
-    DefSec:Toggle({Title = "Heal Aura", Default = false, Callback = function(state) AntiAura.HealAura = state end})
-    DefSec:Button({Title = "Emergency Heal", Callback = function()
+    end)
+    DefSec:AddToggle("ForceField God Mode", false, function(state) AntiAura.GodMode = state end)
+    DefSec:AddToggle("Weapon Repel", false, function(state) AntiAura.Repel = state end)
+    DefSec:AddToggle("Phase Mode (No Collide)", false, function(state) AntiAura.Phase = state end)
+    DefSec:AddToggle("Heal Aura", false, function(state) AntiAura.HealAura = state end)
+    DefSec:AddButton("Emergency Heal", function()
         local myChar = player.Character
         if myChar then
             local hum = myChar:FindFirstChild("Humanoid")
             if hum then
                 hum.Health = hum.MaxHealth
-                WindUI:Notify({Title = "Healed", Content = "Health restored.", Duration = 2, Icon = "heart"})
+                Library:Notify({Title = "Healed", Description = "Health restored."})
             end
         end
-    end})
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════
---  SENTINEL AI TAB (NEW)
+--  TAB 6: SENTINEL AI (NEW)
 -- ═══════════════════════════════════════════════════════════════════════
 do
-    local AIControlSec = AI_Tab:Section({Title = "Sentinel AI Control"})
-    AIControlSec:Toggle({Title = "Enable Sentinel AI", Default = true, Callback = function(state)
+    local AITab = Window:CreateTab("Sentinel AI")
+    local AIPage = AITab:CreatePage("Brain")
+
+    local AIControlSec = AIPage:CreateSection("AI Control")
+    AIControlSec:AddToggle("Enable Sentinel AI", true, function(state)
         KillNotifEnabled = state
         KillLogEnabled = state
         if state then
             Chat_CreateGUI()
             Chat_AddMessage("AI", "Sentinel AI activated. I'm watching your back. Enable Kill Notifications to feed me data.", Color3.fromRGB(0, 255, 100))
-            WindUI:Notify({Title = "Sentinel AI", Content = "AI Combat Brain ONLINE. Chat overlay active.", Duration = 3, Icon = "brain"})
+            Library:Notify({Title = "Sentinel AI", Description = "AI Combat Brain ONLINE. Chat overlay active."})
         end
-    end})
-    AIControlSec:Toggle({Title = "Auto-Analyze Kills", Default = true, Callback = function(state)
+    end)
+    AIControlSec:AddToggle("Auto-Analyze Kills", true, function(state)
         KillNotifEnabled = state
-    end})
-    AIControlSec:Toggle({Title = "Auto-Counter (with confirmation)", Default = true, Callback = function(state)
-        -- When true, AI presents strategy and waits for Y/N
-        -- When false, AI only reports but doesn't propose actions
-    end})
-    AIControlSec:Button({Title = "Open AI Chat", Callback = function()
+    end)
+    AIControlSec:AddButton("Open AI Chat", function()
         Chat_CreateGUI()
         Chat_AddMessage("AI", "Chat opened. Type 'help' for commands.")
-    end})
-    AIControlSec:Button({Title = "Disable All AI Features", Callback = function()
+    end)
+    AIControlSec:AddButton("Disable All AI Features", function()
         Aura.Enabled = false; stopAuraLoop()
         InstaKillEnabled = false; stopInstaKill()
         HitAmpEnabled = false; stopHitAmplifier()
         AntiAura.Enabled = false; stopAntiAura()
         Reach = false; stopReach()
         Chat_AddMessage("AI", "All AI-activated features disabled.", Color3.fromRGB(255, 200, 0))
-    end})
+    end)
 
-    local AIInfoSec = AI_Tab:Section({Title = "AI Intelligence"})
-    AIInfoSec:Label({Title = "Threat Profiler: Tracks every killer's patterns"})
-    AIInfoSec:Label({Title = "Strategy Engine: Combines features to counter threats"})
-    AIInfoSec:Label({Title = "Chat System: Full bidirectional conversation"})
-    AIInfoSec:Label({Title = "Robot Analyst: Animated kill report processor"})
-    AIInfoSec:Label({Title = "Confirmation Gate: AI asks before acting"})
-    AIInfoSec:Button({Title = "View All Threat Profiles", Callback = function()
+    local AIInfoSec = AIPage:CreateSection("AI Intelligence")
+    AIInfoSec:AddLabel("Threat Profiler: Tracks every killer's patterns")
+    AIInfoSec:AddLabel("Strategy Engine: Combines features to counter threats")
+    AIInfoSec:AddLabel("Chat System: Full bidirectional conversation")
+    AIInfoSec:AddLabel("Robot Analyst: Animated kill report processor")
+    AIInfoSec:AddLabel("Confirmation Gate: AI asks before acting")
+    AIInfoSec:AddButton("View All Threat Profiles", function()
         local count = 0
         for name, prof in pairs(ThreatProfiles) do
             count = count + 1
-            WindUI:Notify({
+            Library:Notify({
                 Title = "Profile: " .. name,
-                Content = "Kills: " .. prof.TotalKills .. " | Threat: " .. prof.ThreatScore
+                Description = "Kills: " .. prof.TotalKills .. " | Threat: " .. prof.ThreatScore
                     .. "/100\nFeatures: " .. table.concat(prof.SuspectedFeatures, ", "),
-                Duration = 4, Icon = "user",
+                Duration = 4,
             })
         end
         if count == 0 then
-            WindUI:Notify({Title = "Profiles", Content = "No threat profiles yet.", Duration = 2, Icon = "info"})
+            Library:Notify({Title = "Profiles", Description = "No threat profiles yet."})
         end
-    end})
-    AIInfoSec:Button({Title = "Reset All Profiles", Callback = function()
+    end)
+    AIInfoSec:AddButton("Reset All Profiles", function()
         ThreatProfiles = {}
-        writeJSON(PROFILE_FILE, ThreatProfiles)
-        WindUI:Notify({Title = "Profiles", Content = "All threat profiles cleared.", Duration = 2, Icon = "trash"})
-    end})
+        writeJSON(AI_PROFILE_FILE, ThreatProfiles)
+        Library:Notify({Title = "Profiles", Description = "All threat profiles cleared."})
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════
---  UPDATES TAB
+--  TAB 7: SETTINGS
 -- ═══════════════════════════════════════════════════════════════════════
 do
-    local ChangeSec = Updates_Tab:Section({Title = "EXO Hub Changelog"})
-    ChangeSec:Label({Title = "v8.0 - SENTINEL AI (CURRENT)"})
-    ChangeSec:Label({Title = "  - NEW: Sentinel AI Combat Brain"})
-    ChangeSec:Label({Title = "  - NEW: Animated Robot Kill Analyst"})
-    ChangeSec:Label({Title = "  - NEW: Persistent Bidirectional Chat"})
-    ChangeSec:Label({Title = "  - NEW: Threat Profiler (per-player)"})
-    ChangeSec:Label({Title = "  - NEW: Strategy Engine (feature combos)"})
-    ChangeSec:Label({Title = "  - NEW: Confirmation Gate (asks before acting)"})
-    ChangeSec:Label({Title = "  - NEW: AI explains WHY you're losing"})
-    ChangeSec:Label({Title = "  - 1000x: Aura (multi-vector, triple remote, multi-hitbox)"})
-    ChangeSec:Label({Title = "  - 1000x: InstaKill (120Hz, parallel, 9 hitboxes)"})
-    ChangeSec:Label({Title = "  - 1000x: HitAmp (360 sphere+box, multi-pulse)"})
-    ChangeSec:Label({Title = "  - 1000x: AntiAura (heal, boosted repel, phase)"})
-    ChangeSec:Label({Title = "  - 1000x: ESP (threat-colored, names, distance)"})
-    ChangeSec:Label({Title = "  - 1000x: Tycoon (multi-buy, expanded claim)"})
-    ChangeSec:Label({Title = "  - 1000x: Reach (dynamic, up to 15x)"})
-    ChangeSec:Label({Title = " "})
-    ChangeSec:Label({Title = "v7.0 - UNLIMITED POWER"})
-    ChangeSec:Label({Title = "v6.0 - GODLY TIER"})
-    ChangeSec:Label({Title = "v5.0 - WindUI Edition"})
-    ChangeSec:Label({Title = "v1.1 - Initial release"})
-end
+    local SettingsTab = Window:CreateTab("Settings")
+    local SettingsPage = SettingsTab:CreatePage("Config")
 
--- ═══════════════════════════════════════════════════════════════════════
---  SETTINGS TAB
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local UISec = Settings_Tab:Section({Title = "UI Config"})
-    UISec:Dropdown({Title = "Theme", Options = {"Default", "Dark", "Light", "Rose", "Ocean", "Amethyst"}, Default = 1, Callback = function(option)
-        pcall(function() WindUI:SetTheme(option) end)
-    end})
-
-    local GeneralSec = Settings_Tab:Section({Title = "General"})
-    GeneralSec:Toggle({Title = "Anti-Lag Shield", Default = false, Callback = function(state)
+    local UISec = SettingsPage:CreateSection("General")
+    UISec:AddToggle("Anti-Lag Shield", false, function(state)
         AntiLagEnabled = state
         if state then startAntiLag() else stopAntiLag() end
-    end})
-    GeneralSec:Toggle({Title = "ESP (Threat-Colored)", Default = false, Callback = function(state)
+    end)
+    UISec:AddToggle("ESP (Threat-Colored)", false, function(state)
         ESPEnabled = state
         if state then startESP() else stopESP() end
-    end})
-    GeneralSec:Toggle({Title = "Kill Notifications", Default = false, Callback = function(state)
+    end)
+    UISec:AddToggle("Kill Notifications", false, function(state)
         KillNotifEnabled = state
         if state then
-            WindUI:Notify({Title = "Kill Notifications", Content = "Behavioral analysis + Sentinel AI enabled.", Duration = 4, Icon = "bell"})
+            Library:Notify({Title = "Kill Notifications", Description = "Behavioral analysis + Sentinel AI enabled."})
         end
-    end})
-    GeneralSec:Toggle({Title = "Kill Logs", Default = false, Callback = function(state) KillLogEnabled = state end})
-    GeneralSec:Button({Title = "View Kill Logs", Callback = function()
+    end)
+    UISec:AddToggle("Kill Logs", false, function(state) KillLogEnabled = state end)
+    UISec:AddButton("View Kill Logs", function()
         if #KillLogs == 0 then
-            WindUI:Notify({Title = "Kill Logs", Content = "No kills recorded yet.", Duration = 2, Icon = "info"})
+            Library:Notify({Title = "Kill Logs", Description = "No kills recorded yet."})
             return
         end
         local lastLog = KillLogs[#KillLogs]
-        WindUI:Notify({
+        Library:Notify({
             Title = "Last Kill Log",
-            Content = "Killer: " .. lastLog.Killer .. "\nWeapon: " .. lastLog.Weapon
+            Description = "Killer: " .. lastLog.Killer .. "\nWeapon: " .. lastLog.Weapon
                 .. "\nThreat: " .. lastLog.Threat .. "/10\nTTK: " .. string.format("%.2f", lastLog.TTK) .. "s\nTotal logs: " .. #KillLogs,
-            Duration = 5, Icon = "scroll-text",
+            Duration = 5,
         })
-    end})
+    end)
 
-    local ConfigSec = Settings_Tab:Section({Title = "Config"})
-    ConfigSec:Button({Title = "Save Config", Callback = function()
+    local ConfigSec = SettingsPage:CreateSection("Configuration")
+    ConfigSec:AddButton("Save Config", function()
         local config = {
             ReachSize = ReachSize,
             ThreatRadius = ThreatRadius,
@@ -3073,9 +3689,9 @@ do
             AntiAura_RepelRadius = AntiAura.RepelRadius,
         }
         writeJSON(CONFIG_FILE, config)
-        WindUI:Notify({Title = "Config Saved", Content = "Settings saved.", Duration = 2, Icon = "save"})
-    end})
-    ConfigSec:Button({Title = "Load Config", Callback = function()
+        Library:Notify({Title = "Config Saved", Description = "Settings saved."})
+    end)
+    ConfigSec:AddButton("Load Config", function()
         local config = readJSON(CONFIG_FILE)
         if config then
             ReachSize = config.ReachSize or 3
@@ -3087,14 +3703,46 @@ do
             TG_BurstCount = config.TG_BurstCount or 12
             AntiAura.RepelForce = config.AntiAura_RepelForce or 120
             AntiAura.RepelRadius = config.AntiAura_RepelRadius or 18
-            WindUI:Notify({Title = "Config Loaded", Content = "Settings restored.", Duration = 2, Icon = "folder-open"})
+            Library:Notify({Title = "Config Loaded", Description = "Settings restored."})
         else
-            WindUI:Notify({Title = "No Config", Content = "No saved config found.", Duration = 2, Icon = "x"})
+            Library:Notify({Title = "No Config", Description = "No saved config found."})
         end
-    end})
-    ConfigSec:Button({Title = "Rejoin Server", Callback = function()
+    end)
+    ConfigSec:AddButton("Rejoin Server", function()
         TeleportService:Teleport(game.PlaceId, player)
-    end})
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  TAB 8: UPDATES
+-- ═══════════════════════════════════════════════════════════════════════
+do
+    local UpdatesTab = Window:CreateTab("Updates")
+    local UpdatesPage = UpdatesTab:CreatePage("Changelog")
+    local ChangeSec = UpdatesPage:CreateSection("EXO Hub Changelog")
+    ChangeSec:AddLabel("v8.0 - SENTINEL AI (CURRENT)")
+    ChangeSec:AddLabel("  - NEW: Sentinel AI Combat Brain")
+    ChangeSec:AddLabel("  - NEW: Animated Robot Kill Analyst")
+    ChangeSec:AddLabel("  - NEW: Persistent Bidirectional Chat")
+    ChangeSec:AddLabel("  - NEW: Threat Profiler (per-player)")
+    ChangeSec:AddLabel("  - NEW: Strategy Engine (feature combos)")
+    ChangeSec:AddLabel("  - NEW: Confirmation Gate (asks before acting)")
+    ChangeSec:AddLabel("  - NEW: AI explains WHY you're losing")
+    ChangeSec:AddLabel("  - 1000x: Aura (multi-vector, triple remote, multi-hitbox)")
+    ChangeSec:AddLabel("  - 1000x: InstaKill (120Hz, parallel, 9 hitboxes)")
+    ChangeSec:AddLabel("  - 1000x: HitAmp (360 sphere+box, multi-pulse)")
+    ChangeSec:AddLabel("  - 1000x: AntiAura (heal, boosted repel, phase)")
+    ChangeSec:AddLabel("  - 1000x: ESP (threat-colored, names, distance)")
+    ChangeSec:AddLabel("  - 1000x: Tycoon (multi-buy, expanded claim)")
+    ChangeSec:AddLabel("  - 1000x: Reach (dynamic, up to 15x)")
+    ChangeSec:AddLabel("  - UI: ZyronX Blue + Unlimited Tabs + Mobile")
+    ChangeSec:AddLabel(" ")
+    ChangeSec:AddLabel("v7.0 - UNLIMITED POWER")
+    ChangeSec:AddLabel("v6.0 - GODLY TIER")
+    ChangeSec:AddLabel("v5.0 - WindUI Edition")
+    ChangeSec:AddLabel("v4.0 - Embedded/Velocity/Cerberus")
+    ChangeSec:AddLabel("v3.0 - ZyronX migration")
+    ChangeSec:AddLabel("v1.1 - Initial release")
 end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
@@ -3102,13 +3750,14 @@ end
 -- ╚══════════════════════════════════════════════════════════════════════╝
 setupKillNotifications()
 
-WindUI:Notify({
+Library:Notify({
     Title = "EXO Hub v8.0 – SENTINEL AI",
-    Content = "All systems online. 1000x UPGRADE. AI Combat Brain ACTIVE.\nEnable Kill Notifications to feed the AI.",
+    Description = "All systems online. 1000x UPGRADE. AI Combat Brain ACTIVE.\nTap EXO sphere to toggle UI. Enable Kill Notifications to feed the AI.",
     Duration = 5,
-    Icon = "check-circle",
 })
 
 print("[EXO] Hub v8.0 SENTINEL AI loaded. Build: " .. _EXO_BUILD)
-print("[EXO] AI Chat: Type 'help' in the Sentinel chat overlay")
-print("[EXO] Features: Aura(1000x) InstaKill(120Hz) HitAmp(360) AntiAura(Heal+Repel+Phase) ESP(Threat) AI(Adaptive)")
+print("[EXO] Full 32-section architecture. Zero compression. All features preserved.")
+print("[EXO] Mobile: Tap EXO sphere to open/close. Drag top bar to move.")
+print("[EXO] AI: Enable Kill Notifications → die once → robot analyzes → chat opens → confirm strategy")
+print("[EXO] Chat Commands: help, status, profiles, profile [name], threats, strategy, target [name], disable all, why, clear")
