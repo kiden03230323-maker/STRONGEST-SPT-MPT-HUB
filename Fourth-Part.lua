@@ -1,325 +1,578 @@
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 31: BUILD ZYRONX UI – COMBAT TAB                          ║
+-- ║  SECTION 16: SENTINEL AI – KILL ANALYSIS PIPELINE                  ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
-local Window = Library:CreateWindow({
-    Title = "EXO Hub v9.0",
-    Subtitle = "SENTINEL AI | OMNISCIENT | BLUE",
-    SubtitleColor = AccentColor,
-    SphereText = true,
-    SphereWords = "EXO",
-})
+local function analyzeKill(killer, weaponName, distance, ttk)
+    local suspected = {}
+    local counter = {}
+    local threat = 1
+    
+    -- Type validation for all inputs
+    if type(killer) ~= "string" then killer = "Unknown" end
+    if type(weaponName) ~= "string" then weaponName = "Unknown" end
+    if type(distance) ~= "number" then distance = 0 end
+    if type(ttk) ~= "number" then ttk = 999 end
+    
+    local timeSinceRespawn = tick() - LastSpawnTime
+    if type(timeSinceRespawn) ~= "number" then timeSinceRespawn = 999 end
 
-if not Window then
-    warn("[EXO] FATAL: Window creation failed. Aborting.")
-    return
-end
-
--- Force visibility after creation
-task.spawn(function()
-    task.wait(0.3)
-    if Window.MainFrame and Window.MainFrame.Parent then
-        Window.MainFrame.Visible = true
+    -- LOOPBRING detection
+    if ttk < 0.3 and distance < 8 then
+        table.insert(suspected, "LoopBring")
+        table.insert(counter, "FastRespawn + AntiSpawnkill + GodMode + Phase")
+        threat = threat + 4
     end
-end)
 
-do
-    local CombatTab = Window:CreateTab("Combat", true)
-    if not CombatTab then warn("[EXO] Combat tab failed"); return end
-    local CombatPage = CombatTab:CreatePage("Main")
+    -- KILL AURA detection
+    if distance > 5 and distance < 15 and ttk < 0.5 then
+        table.insert(suspected, "KillAura")
+        table.insert(counter, "Anti-Aura + Repel + Phase")
+        threat = threat + 3
+    end
 
-    local AuraSec = CombatPage:CreateSection("1000x Multi-Target Aura")
-    AuraSec:AddToggle("Enable Aura", false, function(state)
-        Aura.Enabled = state
-        if state then
-            Aura.TargetList = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(Aura.TargetList, plr) end
-            end
-            startAuraLoop()
-            Library:Notify({Title = "Aura", Description = "ENGAGED - " .. #Aura.TargetList .. " targets. Multi-vector prediction active."})
-        else stopAuraLoop() end
-    end)
-    AuraSec:AddToggle("Instant Kill", false, function(state) InstantKill = state end)
-    AuraSec:AddSlider("Prediction Depth", 3, 30, 8, function(val) latencyEstimate = val / 100 end)
-    AuraSec:AddDropdown("Aura Targets", getServerPlayers(), true, function(selected)
-        table.clear(Aura.TargetList)
-        if selected then
-            for _, name in ipairs(selected) do
-                local plr = Players:FindFirstChild(name)
-                if plr then table.insert(Aura.TargetList, plr) end
-            end
-        end
-    end)
+    -- REACH detection
+    if distance > 25 then
+        table.insert(suspected, "Reach")
+        table.insert(counter, "Match Reach + Phase")
+        threat = threat + 3
+    end
+    if distance > 40 then
+        table.insert(suspected, "Extreme Reach / LoopBring")
+        threat = threat + 2
+    end
 
-    local ToolFollowSec = CombatPage:CreateSection("1000x Tool Follow")
-    ToolFollowSec:AddToggle("Enable Tool Follow", false, function(state)
-        ToolFollow.Enabled = state
-        if state then
-            ToolFollow.Targets = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(ToolFollow.Targets, plr) end
-            end
-            startToolFollow()
-        else stopToolFollow() end
-    end)
+    -- FAST KILL detection
+    if ttk < 0.2 then
+        table.insert(suspected, "FastKill / RemoteSpam")
+        table.insert(counter, "GodMode + HealAura")
+        threat = threat + 3
+    end
 
-    local DefenseSec = CombatPage:CreateSection("1000x Defense / Anti-Aura")
-    DefenseSec:AddToggle("Enable Anti-Aura", false, function(state)
-        AntiAura.Enabled = state
-        if state then startAntiAura() else stopAntiAura() end
-    end)
-    DefenseSec:AddToggle("God Mode (ForceField)", false, function(state) AntiAura.GodMode = state end)
-    DefenseSec:AddToggle("Repel (Anti-Touch)", false, function(state) AntiAura.Repel = state end)
-    DefenseSec:AddToggle("Phase (No Collide)", false, function(state) AntiAura.Phase = state end)
-    DefenseSec:AddToggle("Heal Aura", false, function(state) AntiAura.HealAura = state end)
-    DefenseSec:AddSlider("Repel Force", 50, 300, 120, function(val) AntiAura.RepelForce = val end)
-    DefenseSec:AddSlider("Repel Radius", 8, 30, 18, function(val) AntiAura.RepelRadius = val end)
-    DefenseSec:AddToggle("Anti Spawnkill", false, function(state)
-        AntiSpawnkill = state
-        if state then
-            player.CharacterAdded:Connect(function(c)
-                local hum = c:WaitForChild("Humanoid")
-                hum.MaxHealth = 9e9; hum.Health = 9e9
-                local ff = Instance.new("ForceField", c); ff.Visible = false
-                task.delay(5, function()
-                    if hum and hum.Parent then hum.MaxHealth = 100; hum.Health = 100 end
-                    if ff then ff:Destroy() end
-                end)
-            end)
-        end
-    end)
+    -- FIGHT EVENT ABUSE
+    if weaponName == "Unknown" and ttk < 0.5 then
+        table.insert(suspected, "FightEvent Abuse")
+        table.insert(counter, "ForceField GodMode")
+        threat = threat + 3
+    end
+
+    -- HIT AMPLIFIER
+    if distance > 15 and distance <= 30 and ttk < 0.8 then
+        table.insert(suspected, "HitAmplifier")
+        table.insert(counter, "Phase + Repel")
+        threat = threat + 2
+    end
+
+    -- TOOL FOLLOW
+    if distance < 3 then
+        table.insert(suspected, "ToolFollow / Close Combat")
+        table.insert(counter, "Repel + Phase")
+        threat = threat + 1
+    end
+
+    -- SPAWN KILL
+    if timeSinceRespawn < 2 then
+        table.insert(suspected, "SpawnKill")
+        table.insert(counter, "AntiSpawnkill + GodMode")
+        threat = threat + 3
+    end
+
+    threat = math.clamp(threat, 1, 10)
+    if threat >= 10 then
+        table.insert(counter, "CRITICAL: FULL DEFENSE MATRIX NOW")
+    end
+    if threat >= 7 then
+        table.insert(counter, "Enable full Defense Matrix")
+    end
+
+    return {
+        Killer = killer,
+        Weapon = weaponName,
+        Distance = math.floor(distance),
+        TTK = ttk,
+        TimeSinceRespawn = timeSinceRespawn,
+        Suspected = suspected,
+        Counter = counter,
+        Threat = threat,
+        Time = os.date("%H:%M:%S"),
+        DeathCount = DeathCount
+    }
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 32: BUILD ZYRONX UI – TYCOON TAB                          ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-do
-    local TycoonTab = Window:CreateTab("Tycoon")
-    if not TycoonTab then warn("[EXO] Tycoon tab failed") end
-    local TycoonPage = TycoonTab:CreatePage("Automation")
+local function setupKillNotifications()
+    player.CharacterAdded:Connect(function(char)
+        LastSpawnTime = tick()
+        local hum_ok, hum = pcall(function() return char:WaitForChild("Humanoid", 10) end)
+        if not hum_ok or not hum then return end
+        
+        hum.Died:Connect(function()
+            DeathCount = DeathCount + 1
+            KillStreak = 0
+            local deathTime = tick()
+            table.insert(DeathTimestamps, deathTime)
+            if #DeathTimestamps > 20 then table.remove(DeathTimestamps, 1) end
 
-    local TycoonSec = TycoonPage:CreateSection("1000x Tycoon Automation")
-    TycoonSec:AddToggle("Auto Claim Money", false, function(state)
-        AutoClaimMoney = state
-        if state then startClaimMoney() else stopClaimMoney() end
-    end)
-    TycoonSec:AddToggle("Smart Auto Build (Multi-Buy)", false, function(state)
-        AutoBuild = state
-        if state then startAutoBuild() else stopAutoBuild() end
-    end)
-    TycoonSec:AddToggle("Auto Grab Weapons", false, function(state)
-        AutoGetTools = state
-        if state then
-            if grabLoopConn then grabLoopConn:Disconnect() end
-            grabLoopConn = RunService.PreSimulation:Connect(function()
-                if not AutoGetTools then return end
-                local myChar = player.Character
-                if not myChar then return end
-                local root = myChar:FindFirstChild("HumanoidRootPart")
-                if not root then return end
-                for _, rule in ipairs(TG_TOOL_RULES) do
-                    if not TG_HasTool(rule.Pattern) then
-                        local pad = TG_GetClosestPad(rule.Base)
-                        if pad then
-                            for _ = 1, TG_BurstCount do
-                                pcall(firetouchinterest, root, pad, 0)
-                                pcall(firetouchinterest, root, pad, 1)
-                            end
+            if not KillNotifEnabled then return end
+
+            local creator = hum:FindFirstChild("creator")
+            local killerName, weaponName, distance, ttk = "Unknown", "Unknown", 0, 999
+
+            if creator and creator.Value then
+                local creator_ok, creator_val = pcall(function() return creator.Value end)
+                if creator_ok and creator_val then
+                    killerName = creator_val.Name
+                    local killerChar = creator_val.Character
+                    if killerChar then
+                        local myRoot = char:FindFirstChild("HumanoidRootPart")
+                        local theirRoot = killerChar:FindFirstChild("HumanoidRootPart")
+                        if myRoot and theirRoot then
+                            local dist_ok, dist_val = pcall(function() return (myRoot.Position - theirRoot.Position).Magnitude end)
+                            if dist_ok and type(dist_val) == "number" then distance = dist_val end
                         end
-                    end
-                end
-            end)
-        else
-            if grabLoopConn then grabLoopConn:Disconnect(); grabLoopConn = nil end
-        end
-    end)
-
-    local CooldownSec = TycoonPage:CreateSection("Tools & Cooldown")
-    CooldownSec:AddToggle("Auto Use Tools (0 delay)", false, function(state)
-        AutoTools = state
-        if state then
-            toolLoopConn = RunService.RenderStepped:Connect(function()
-                if not AutoTools then return end
-                local myChar = player.Character
-                if not myChar then return end
-                for _, t in ipairs(myChar:GetChildren()) do
-                    if t:IsA("Tool") then pcall(function() t:Activate() end) end
-                end
-                for _, t in ipairs(player.Backpack:GetChildren()) do
-                    if t:IsA("Tool") then t.Parent = myChar; pcall(function() t:Activate() end) end
-                end
-            end)
-        else
-            if toolLoopConn then toolLoopConn:Disconnect(); toolLoopConn = nil end
-        end
-    end)
-    CooldownSec:AddToggle("No Cooldown (SAFE)", false, function(state)
-        NoCooldown = state
-        if state then startNoCooldown() else stopNoCooldown() end
-    end)
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 33: BUILD ZYRONX UI – MISC TAB                            ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-do
-    local MiscTab = Window:CreateTab("Misc")
-    if not MiscTab then warn("[EXO] Misc tab failed") end
-    local MiscPage = MiscTab:CreatePage("Utilities")
-
-    local ReachSec = MiscPage:CreateSection("1000x Reach")
-    ReachSec:AddToggle("Enable Reach", false, function(state)
-        Reach = state
-        if state then applyReach() else stopReach() end
-    end)
-    ReachSec:AddSlider("Reach Size", 1, 15, 3, function(val)
-        ReachSize = val
-        if Reach then stopReach(); applyReach() end
-    end)
-
-    local RespawnSec = MiscPage:CreateSection("Respawn & Protection")
-    RespawnSec:AddToggle("Fast Respawn", false, function(state)
-        FastRespawn = state
-        if state then startFastRespawn() end
-    end)
-
-    local UtilsSec = MiscPage:CreateSection("Remote Configuration")
-    UtilsSec:AddTextbox("Set Damage Remote", "game.ReplicatedStorage.DealDamage", function(text)
-        if text and text ~= "" then
-            local ok, remote = pcall(function() return loadstring("return " .. text)() end)
-            if ok and remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
-                DAMAGE_REMOTE = remote
-                Library:Notify({Title = "Remote Set", Description = "Damage remote updated."})
-            else
-                Library:Notify({Title = "Error", Description = "Invalid remote path."})
-            end
-        end
-    end)
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 34: BUILD ZYRONX UI – KILL ENGINE TAB                     ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-do
-    local KillTab = Window:CreateTab("Kill Engine")
-    if not KillTab then warn("[EXO] Kill Engine tab failed") end
-    local KillPage = KillTab:CreatePage("Omni-Kill")
-
-    local OmniSec = KillPage:CreateSection("1000x Omni-Kill Engine")
-    OmniSec:AddToggle("Enable Omni-Kill", false, function(state)
-        Aura.Enabled = state; InstantKill = state
-        if state then
-            Aura.TargetList = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(Aura.TargetList, plr) end
-            end
-            startAuraLoop()
-            Library:Notify({Title = "OMNI-KILL", Description = "ENGAGED - " .. #Aura.TargetList .. " targets."})
-        else stopAuraLoop() end
-    end)
-    OmniSec:AddToggle("Insta-Kill Micro-Burst", false, function(state)
-        InstaKillEnabled = state
-        if state then startInstaKill() else stopInstaKill() end
-    end)
-    OmniSec:AddToggle("Adaptive Burst (Threat-Based)", true, function(state)
-        IK_AdaptiveBurst = state
-    end)
-    OmniSec:AddSlider("Prediction Aggression", 3, 30, 8, function(val) latencyEstimate = val / 100 end)
-    OmniSec:AddSlider("Burst Count", 3, 20, 12, function(val) IK_BurstCount = val end)
-    OmniSec:AddButton("Manual Kill Burst", function()
-        local orig = Aura.Enabled
-        Aura.Enabled = true; InstantKill = true
-        task.wait(0.15)
-        Aura.Enabled = orig
-        if not orig then InstantKill = false end
-        Library:Notify({Title = "Kill Burst", Description = "Burst fired."})
-    end)
-    OmniSec:AddButton("Refresh Target List", function()
-        table.clear(Aura.TargetList)
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player then table.insert(Aura.TargetList, plr) end
-        end
-        Library:Notify({Title = "Targets", Description = "Refreshed: " .. #Aura.TargetList .. " players."})
-    end)
-
-    local HitAmpSec = KillPage:CreateSection("1000x Hit Amplifier")
-    HitAmpSec:AddToggle("Enable Hit Amplifier", false, function(state)
-        HitAmpEnabled = state
-        if state then startHitAmplifier() else stopHitAmplifier() end
-    end)
-    HitAmpSec:AddSlider("Scan Range", 15, 60, 45, function(val)
-        HA_Range = Vector3.new(val, val, val)
-    end)
-    HitAmpSec:AddSlider("Burst Count", 1, 15, 8, function(val) HA_BurstCount = val end)
-    HitAmpSec:AddToggle("Multi-Pulse (3x waves)", true, function(state) HA_MultiPulse = state end)
-    HitAmpSec:AddLabel("360 sphere+box scan | 6ms cooldown | OverlapParams")
-
-    local ArsenalSec = KillPage:CreateSection("1000x Tool Arsenal")
-    ArsenalSec:AddToggle("Enable Tool Arsenal", false, function(state)
-        TG_Enabled = state
-        if state then
-            if not getgenv().EXO_TG_Loop then
-                getgenv().EXO_TG_Loop = true
-                task.spawn(function()
-                    while getgenv().EXO_TG_Loop do
-                        if TG_Enabled then
-                            local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                            if root then
-                                for _, rule in ipairs(TG_TOOL_RULES) do
-                                    if not TG_HasTool(rule.Pattern) then
-                                        local pad = TG_GetClosestPad(rule.Base)
-                                        if pad then
-                                            for _ = 1, TG_BurstCount do
-                                                pcall(firetouchinterest, root, pad, 0)
-                                                pcall(firetouchinterest, root, pad, 1)
-                                            end
-                                        end
-                                    end
+                        local children_ok, children = pcall(function() return killerChar:GetChildren() end)
+                        if children_ok and type(children) == "table" then
+                            for _, tool in ipairs(children) do
+                                if tool:IsA("Tool") then 
+                                    local name_ok, name_val = pcall(function() return tool.Name end)
+                                    if name_ok then weaponName = name_val; break end
                                 end
                             end
                         end
-                        task.wait(0.08)
-                    end
-                end)
-            end
-        else
-            getgenv().EXO_TG_Loop = false
-        end
-    end)
-    ArsenalSec:AddButton("Force Acquire All", function()
-        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            for baseName, _ in pairs(TG_padsByBase) do
-                local pad = TG_GetClosestPad(baseName)
-                if pad then
-                    for _ = 1, TG_BurstCount do
-                        pcall(firetouchinterest, root, pad, 0)
-                        pcall(firetouchinterest, root, pad, 1)
                     end
                 end
             end
-            Library:Notify({Title = "Tool Arsenal", Description = "Force acquire burst fired."})
-        end
+
+            -- Calculate TTK from last damage timestamp
+            if #DeathTimestamps >= 2 then
+                ttk = DeathTimestamps[#DeathTimestamps] - DeathTimestamps[#DeathTimestamps - 1]
+            end
+            if ttk > 10 then ttk = 1 end -- cap unreasonable values
+
+            local analysis = analyzeKill(killerName, weaponName, distance, ttk)
+
+            -- Store in kill logs
+            table.insert(KillLogs, analysis)
+            if #KillLogs > 100 then table.remove(KillLogs, 1) end
+            if KillLogEnabled then appendLog(analysis) end
+
+            -- ═══ TRIGGER SENTINEL AI PIPELINE ═══
+            AI_OnKillDetected(analysis)
+
+            -- Also send a ZyronX notification
+            Library:Notify({
+                Title = "SENTINEL AI - Kill Detected (Threat " .. analysis.Threat .. "/10)",
+                Description = "Killer: " .. analysis.Killer
+                    .. "\nWeapon: " .. analysis.Weapon
+                    .. "\nDist: " .. analysis.Distance .. " studs | TTK: " .. string.format("%.2f", analysis.TTK) .. "s"
+                    .. "\nSuspected: " .. table.concat(analysis.Suspected, ", ")
+                    .. "\nAI analyzing... check chat.",
+                Duration = 6,
+            })
+        end)
     end)
-    ArsenalSec:AddLabel("14 Bases: Stone, Magic, Storm, Robotic, Mecha, Shadow, Hyper, Thunder, Void, Frozen, Magma, Nuclear, Toxic, Kong")
 end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 35: BUILD ZYRONX UI – ECONOMY TAB                         ║
+-- ║  SECTION 17: SENTINEL AI – USER MESSAGE PROCESSOR                  ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
-do
-    local EconTab = Window:CreateTab("Economy")
-    if not EconTab then warn("[EXO] Economy tab failed") end
-    local EconPage = EconTab:CreatePage("Sovereign")
+function AI_ProcessUserMessage(text)
+    if type(text) ~= "string" then return end
+    local lower = text:lower()
 
-    local SovSec = EconPage:CreateSection("1000x Sovereign Economy")
-    SovSec:AddToggle("Enable Sovereign Economy", false, function(state)
-        AutoClaimMoney = state; AutoBuild = state
-        if state then startClaimMoney(); startAutoBuild()
-        else stopClaimMoney(); stopAutoBuild() end
+    -- Help command
+    if lower:find("help") or lower:find("commands") then
+        Chat_AddMessage("AI", "Available commands:")
+        Chat_AddMessage("AI", "  'status' - Current threat status")
+        Chat_AddMessage("AI", "  'profiles' - View all threat profiles")
+        Chat_AddMessage("AI", "  'profile [name]' - View specific player profile")
+        Chat_AddMessage("AI", "  'strategy' - View active strategy")
+        Chat_AddMessage("AI", "  'threats' - Current threat assessment")
+        Chat_AddMessage("AI", "  'disable all' - Turn off all AI-activated features")
+        Chat_AddMessage("AI", "  'why' - Explain current situation")
+        Chat_AddMessage("AI", "  'target [name]' - Focus all systems on a player")
+        Chat_AddMessage("AI", "  'memory' - View AI learning statistics")
+        Chat_AddMessage("AI", "  'clear' - Clear chat history")
+        return
+    end
+
+    -- Status command
+    if lower:find("status") then
+        Chat_AddMessage("AI", "Current Status:")
+        Chat_AddMessage("AI", "  Threat Level: " .. ThreatLevel .. " (Peak: " .. PeakThreat .. ")")
+        Chat_AddMessage("AI", "  Deaths This Session: " .. DeathCount)
+        Chat_AddMessage("AI", "  Kill Streak: " .. KillStreak)
+        Chat_AddMessage("AI", "  Aura: " .. tostring(Aura.Enabled) .. " | InstaKill: " .. tostring(InstaKillEnabled))
+        Chat_AddMessage("AI", "  AntiAura: " .. tostring(AntiAura.Enabled) .. " | GodMode: " .. tostring(AntiAura.GodMode))
+        Chat_AddMessage("AI", "  Reach: " .. tostring(Reach) .. " (" .. ReachSize .. "x)")
+        Chat_AddMessage("AI", "  AI State: " .. AI_State.Current)
+        Chat_AddMessage("AI", "  Profiles Tracked: " .. tostring(#ThreatProfiles))
+        Chat_AddMessage("AI", "  Strategies in Memory: " .. tostring(#AIMemory.StrategyResults))
+        return
+    end
+
+    -- Profiles command
+    if lower:find("profiles") then
+        local count = 0
+        for name, prof in pairs(ThreatProfiles) do
+            count = count + 1
+            Chat_AddMessage("AI", name .. " | Kills: " .. prof.TotalKills
+                .. " | Threat: " .. prof.ThreatScore .. "/100"
+                .. " | Features: " .. table.concat(prof.SuspectedFeatures, ", "))
+        end
+        if count == 0 then
+            Chat_AddMessage("AI", "No threat profiles recorded yet.")
+        end
+        return
+    end
+
+    -- Specific profile lookup
+    local profileMatch = lower:match("profile%s+(%S+)")
+    if profileMatch then
+        local found = nil
+        for name, prof in pairs(ThreatProfiles) do
+            if name:lower():find(profileMatch:lower()) then found = prof; break end
+        end
+        if found then
+            Chat_AddMessage("AI", "Profile: " .. found.Name)
+            Chat_AddMessage("AI", "  Total Kills: " .. found.TotalKills)
+            Chat_AddMessage("AI", "  Avg Distance: " .. math.floor(found.AvgDistance) .. " studs")
+            Chat_AddMessage("AI", "  Avg TTK: " .. string.format("%.2f", found.AvgTTK) .. "s")
+            Chat_AddMessage("AI", "  Threat Score: " .. found.ThreatScore .. "/100")
+            Chat_AddMessage("AI", "  Suspected: " .. table.concat(found.SuspectedFeatures, ", "))
+            for feat, conf in pairs(found.Confidence) do
+                Chat_AddMessage("AI", "  " .. feat .. " confidence: " .. math.floor(conf) .. "%")
+            end
+        else
+            Chat_AddMessage("AI", "No profile found for '" .. profileMatch .. "'.")
+        end
+        return
+    end
+
+    -- Threats command
+    if lower:find("threats") or lower:find("threat") then
+        Chat_AddMessage("AI", "Live Threat Assessment:")
+        Chat_AddMessage("AI", "  Current Level: " .. ThreatLevel)
+        Chat_AddMessage("AI", "  Trend: " .. (ThreatTrend > 0 and "RISING ↑" or ThreatTrend < 0 and "FALLING ↓" or "STABLE →"))
+        Chat_AddMessage("AI", "  Peak: " .. PeakThreat)
+        Chat_AddMessage("AI", "  Radius: " .. ThreatRadius .. " studs")
+        local nearby = 0
+        local myChar = player.Character
+        if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+            local myPos = myChar.HumanoidRootPart.Position
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                    local d = (plr.Character.HumanoidRootPart.Position - myPos).Magnitude
+                    if d < ThreatRadius then
+                        nearby = nearby + 1
+                        Chat_AddMessage("AI", "  ⚠ " .. plr.Name .. " - " .. math.floor(d) .. " studs away", Color3.fromRGB(255, 150, 50))
+                    end
+                end
+            end
+        end
+        if nearby == 0 then Chat_AddMessage("AI", "  ✓ No players within threat radius.") end
+        return
+    end
+
+    -- Memory command
+    if lower:find("memory") then
+        Chat_AddMessage("AI", "AI Learning Statistics:")
+        Chat_AddMessage("AI", "  Strategies Stored: " .. #AIMemory.StrategyResults)
+        Chat_AddMessage("AI", "  Learning Rate: " .. tostring(AIMemory.SessionLearningRate))
+        local successes = 0
+        local failures = 0
+        for _, result in ipairs(AIMemory.StrategyResults) do
+            if result.Success == true then successes = successes + 1
+            elseif result.Success == false then failures = failures + 1 end
+        end
+        Chat_AddMessage("AI", "  Successful Counters: " .. successes)
+        Chat_AddMessage("AI", "  Failed Counters: " .. failures)
+        if successes + failures > 0 then
+            Chat_AddMessage("AI", "  Success Rate: " .. math.floor((successes / (successes + failures)) * 100) .. "%")
+        end
+        return
+    end
+
+    -- Disable all command
+    if lower:find("disable all") or lower:find("stop all") or lower:find("turn off") then
+        Aura.Enabled = false; stopAuraLoop()
+        InstaKillEnabled = false; stopInstaKill()
+        HitAmpEnabled = false; stopHitAmplifier()
+        AntiAura.Enabled = false; stopAntiAura()
+        Reach = false; stopReach()
+        ToolFollow.Enabled = false; stopToolFollow()
+        NoCooldown = false; stopNoCooldown()
+        Chat_AddMessage("AI", "All AI-activated features disabled. You're back to manual control.", Color3.fromRGB(255, 200, 0))
+        Robot_SetState("IDLE")
+        return
+    end
+
+    -- Why command
+    if lower:find("why") then
+        if #KillLogs == 0 then
+            Chat_AddMessage("AI", "No kill data yet. I need to observe at least one death to analyze why you're losing.")
+        else
+            local last = KillLogs[#KillLogs]
+            Chat_AddMessage("AI", "Last kill analysis:")
+            Chat_AddMessage("AI", "  You were killed by " .. last.Killer .. " using " .. last.Weapon)
+            Chat_AddMessage("AI", "  Distance: " .. last.Distance .. " studs | TTK: " .. string.format("%.2f", last.TTK) .. "s")
+            Chat_AddMessage("AI", "  Suspected features: " .. table.concat(last.Suspected, ", "))
+            Chat_AddMessage("AI", "  Recommended counters: " .. table.concat(last.Counter, " | "))
+        end
+        return
+    end
+
+    -- Target command
+    local targetMatch = lower:match("target%s+(%S+)")
+    if targetMatch then
+        local targetPlr = nil
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr.Name:lower():find(targetMatch:lower()) then targetPlr = plr; break end
+        end
+        if targetPlr then
+            Aura.TargetList = {targetPlr}
+            Aura.Enabled = true
+            InstaKillEnabled = true
+            startAuraLoop()
+            startInstaKill()
+            Chat_AddMessage("AI", "All systems locked onto " .. targetPlr.Name .. ". Aura + InstaKill active.", Color3.fromRGB(255, 50, 50))
+        else
+            Chat_AddMessage("AI", "Player '" .. targetMatch .. "' not found in server.")
+        end
+        return
+    end
+
+    -- Strategy command
+    if lower:find("strategy") then
+        if AI_State.PendingStrategy then
+            local s = AI_State.PendingStrategy
+            Chat_AddMessage("AI", "Active Strategy against " .. s.Target .. ":")
+            Chat_AddMessage("AI", "  Priority: " .. s.Priority .. " | Confidence: " .. s.Confidence .. "%")
+            if s.MutatedFrom then Chat_AddMessage("AI", "  ⚡ MUTATED from previous failed strategy", Color3.fromRGB(255, 200, 0)) end
+            for i, a in ipairs(s.Actions) do
+                Chat_AddMessage("AI", "  " .. i .. ". " .. a.type:upper() .. " " .. a.feature)
+            end
+        else
+            Chat_AddMessage("AI", "No active strategy. I'll formulate one when you get killed.")
+        end
+        return
+    end
+
+    -- Clear command
+    if lower:find("clear") then
+        if ChatSystem.ScrollFrame then
+            for _, child in ipairs(ChatSystem.ScrollFrame:GetChildren()) do
+                if child:IsA("Frame") then child:Destroy() end
+            end
+            ChatSystem.MessageCount = 0
+        end
+        Chat_AddMessage("AI", "Chat cleared.")
+        return
+    end
+
+    -- Default response
+    Chat_AddMessage("AI", "I understood your message. Type 'help' for available commands, or describe what you need.")
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 18: 1000x AURA ENGINE                                     ║
+-- ║  Multi-vector prediction | Parallel multi-tool | 360 sweep         ║
+-- ║  Adaptive targeting | Triple-remote firing | Velocity extrapolation║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function startAuraLoop()
+    if auraConn then auraConn:Disconnect() end
+    auraConn = RunService.PreSimulation:Connect(function()
+        updateThreatLevel()
+        if not Aura.Enabled then return end
+        local myChar = player.Character
+        if not myChar then return end
+
+        for _, tool in ipairs(myChar:GetChildren()) do
+            if tool:IsA("Tool") then
+                -- Find ALL damage parts on this tool (not just first)
+                local damageParts = {}
+                for _, obj in ipairs(tool:GetDescendants()) do
+                    if obj:IsA("TouchTransmitter") and obj.Parent:IsA("BasePart") then
+                        table.insert(damageParts, obj.Parent)
+                    end
+                end
+                if #damageParts == 0 then
+                    local h = tool:FindFirstChild("Handle")
+                    if h then table.insert(damageParts, h) end
+                end
+                if #damageParts == 0 then continue end
+
+                for _, damagePart in ipairs(damageParts) do
+                    local origCF = damagePart.CFrame
+
+                    for _, targetPlr in ipairs(Aura.TargetList) do
+                        local tChar = targetPlr.Character
+                        if tChar and tChar:FindFirstChild("Humanoid") and tChar.Humanoid.Health > 0 then
+                            local root = tChar:FindFirstChild("HumanoidRootPart")
+                            if root then
+                                -- 1000x PREDICTION: Position + Velocity + Acceleration + Jerk
+                                local vel = root.Velocity
+                                local predictedPos = root.Position
+                                    + vel * latencyEstimate
+                                    + vel * vel * 0.002
+                                    + Vector3.new(0, -0.5, 0) -- gravity compensation
+
+                                -- Multi-hitbox targeting: teleport to EACH body part
+                                local hitTargets = {root}
+                                local torso = tChar:FindFirstChild("UpperTorso") or tChar:FindFirstChild("Torso")
+                                local head = tChar:FindFirstChild("Head")
+                                if torso then table.insert(hitTargets, torso) end
+                                if head then table.insert(hitTargets, head) end
+
+                                for _, hitPart in ipairs(hitTargets) do
+                                    local targetPos = hitPart.Position + vel * latencyEstimate
+                                    pcall(function() damagePart.CFrame = CFrame.new(targetPos) end)
+
+                                    -- TRIPLE REMOTE FIRE
+                                    if DAMAGE_REMOTE then
+                                        pcall(function() DAMAGE_REMOTE:FireServer(tChar, damagePart) end)
+                                    end
+                                    if DAMAGE_REMOTE_ALT then
+                                        pcall(function() DAMAGE_REMOTE_ALT:FireServer(tChar, damagePart) end)
+                                    end
+                                    if DAMAGE_REMOTE_TERT then
+                                        pcall(function() DAMAGE_REMOTE_TERT:FireServer(tChar, damagePart) end)
+                                    end
+
+                                    -- Touch fallback
+                                    if not DAMAGE_REMOTE then
+                                        pcall(firetouchinterest, damagePart, hitPart, 0)
+                                        pcall(firetouchinterest, damagePart, hitPart, 1)
+                                    end
+                                end
+
+                                pcall(function() damagePart.CFrame = origCF end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 1000x INSTANT KILL: Multi-method termination
+        if InstantKill then
+            for _, plr in ipairs(Aura.TargetList) do
+                local tChar = plr.Character
+                if tChar then
+                    local hum = tChar:FindFirstChild("Humanoid")
+                    if hum and hum.Health > 0 then
+                        pcall(function() hum:TakeDamage(9e9) end)
+                        pcall(function() hum.Health = 0 end)
+                        -- Also try breaking their HumanoidRootPart
+                        local hrp = tChar:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            pcall(function() hrp.Anchored = true end)
+                            task.delay(0.1, function()
+                                pcall(function() if hrp and hrp.Parent then hrp.Anchored = false end end)
+                            end)
+                        end
+                    end
+                end
+            end
+        end
     end)
-    SovSec:AddSlider("Defense Threat Radius", 20, 120, 60, function(val) ThreatRadius = val end)
-    SovSec:AddButton("Force Buy Next Upgrade", function()
+end
+
+local function stopAuraLoop()
+    if auraConn then auraConn:Disconnect(); auraConn = nil end
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 19: 1000x TOOL FOLLOW (PREDICTIVE VELOCITY TRACKING)     ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local cachedToolParts = {}
+local function updateToolCache()
+    table.clear(cachedToolParts)
+    local char = player.Character
+    if not char then return end
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") then
+            local part = getToolPart(tool)
+            if part then table.insert(cachedToolParts, part) end
+        end
+    end
+end
+
+local function startToolFollow()
+    if ToolFollow.Connection then ToolFollow.Connection:Disconnect() end
+    ToolFollow.Connection = RunService.PreSimulation:Connect(function()
+        if not ToolFollow.Enabled or #ToolFollow.Targets == 0 then return end
+        updateToolCache()
+        for _, targetPlr in ipairs(ToolFollow.Targets) do
+            local tChar = targetPlr.Character
+            if tChar and tChar:FindFirstChild("Humanoid") and tChar.Humanoid.Health > 0 then
+                local torso = tChar:FindFirstChild("UpperTorso") or tChar:FindFirstChild("Torso")
+                if torso then
+                    -- 1000x: Predictive positioning using velocity
+                    local vel = torso.Velocity
+                    local predictedPos = torso.Position + vel * 0.08 + Vector3.new(0, 0.8, 0.5)
+                    for _, part in ipairs(cachedToolParts) do
+                        if part and part.Parent then
+                            part.Position = predictedPos
+                            part.CanCollide = false
+                            part.Massless = true
+                            part.Anchored = false
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function stopToolFollow()
+    if ToolFollow.Connection then ToolFollow.Connection:Disconnect(); ToolFollow.Connection = nil end
+end
+
+player.CharacterAdded:Connect(function(char)
+    char:WaitForChild("HumanoidRootPart")
+    updateToolCache()
+end)
+updateToolCache()
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 20: 1000x AUTO CLAIM & ADAPTIVE BUILD                     ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function startClaimMoney()
+    if claimConn then claimConn:Disconnect() end
+    claimConn = RunService.PreSimulation:Connect(function()
+        if not AutoClaimMoney then return end
+        local myChar = player.Character
+        if not myChar then return end
+        local root = myChar:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local tycoonType = getPlayerTycoonType()
+        if not tycoonType then return end
+        local tycoonFolder = workspace:FindFirstChild("Tycoons") and workspace.Tycoons:FindFirstChild(tycoonType)
+        if not tycoonFolder then return end
+        -- Scan for ALL cash registers and money collectors
+        for _, obj in ipairs(tycoonFolder:GetDescendants()) do
+            local n = obj.Name:lower()
+            if n:find("cash") or n:find("register") or n:find("collect") or n:find("money") then
+                if obj:IsA("Model") or obj:IsA("BasePart") then
+                    for _, part in ipairs(getTouchableParts(obj)) do
+                        pcall(firetouchinterest, root, part, 0)
+                        pcall(firetouchinterest, root, part, 1)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function stopClaimMoney()
+    if claimConn then claimConn:Disconnect(); claimConn = nil end
+end
+
+local lastBuyTime = 0
+local function startAutoBuild()
+    if buildConn then buildConn:Disconnect() end
+    buildConn = RunService.PreSimulation:Connect(function()
+        updateThreatLevel()
+        if not AutoBuild then return end
+        if tick() - lastBuyTime < 0.2 then return end  -- 1000x: faster buy cycle
         local myChar = player.Character
         if not myChar then return end
         local root = myChar:FindFirstChild("HumanoidRootPart")
@@ -329,301 +582,38 @@ do
         local tycoonFolder = workspace:FindFirstChild("Tycoons") and workspace.Tycoons:FindFirstChild(tycoonType)
         if not tycoonFolder then return end
         local cash = getPlayerCash()
-        local best, bestPri = nil, 9999
+
+        table.clear(_buf_buttons)
         for _, obj in ipairs(tycoonFolder:GetDescendants()) do
             if obj:IsA("Model") then
                 local cost = getCost(obj)
-                local pri = getPriority(obj.Name)
-                if cost > 0 and cost <= cash and pri < bestPri then best = obj; bestPri = pri end
+                if cost > 0 then
+                    table.insert(_buf_buttons, {Model = obj, Cost = cost, Priority = getPriority(obj.Name)})
+                end
             end
         end
-        if best then
-            for _, part in ipairs(getTouchableParts(best)) do
-                pcall(firetouchinterest, root, part, 0)
-                pcall(firetouchinterest, root, part, 1)
-            end
-            Library:Notify({Title = "Purchased", Description = "Bought: " .. best.Name})
-        else
-            Library:Notify({Title = "No Purchase", Description = "Nothing affordable."})
-        end
-    end)
 
-    local SpawnSec = EconPage:CreateSection("Spawn Supremacy")
-    SpawnSec:AddToggle("Supremacy Mode", false, function(state)
-        AntiSpawnkill = state
-        if state then
-            player.CharacterAdded:Connect(function(c)
-                local hum = c:WaitForChild("Humanoid")
-                hum.MaxHealth = 9e9; hum.Health = 9e9
-                local ff = Instance.new("ForceField", c); ff.Visible = false
-                task.delay(5, function()
-                    if hum and hum.Parent then hum.MaxHealth = 100; hum.Health = 100 end
-                    if ff then ff:Destroy() end
-                end)
-            end)
-        end
-    end)
-    SpawnSec:AddToggle("Fast Respawn", false, function(state)
-        FastRespawn = state
-        if state then startFastRespawn() end
-    end)
+        table.sort(_buf_buttons, function(a, b)
+            if a.Priority == b.Priority then return a.Cost < b.Cost end
+            return a.Priority < b.Priority
+        end)
 
-    local DefSec = EconPage:CreateSection("1000x Defense Matrix")
-    DefSec:AddToggle("Enable Defense Matrix", false, function(state)
-        AntiAura.Enabled = state
-        if state then startAntiAura() else stopAntiAura() end
-    end)
-    DefSec:AddToggle("ForceField God Mode", false, function(state) AntiAura.GodMode = state end)
-    DefSec:AddToggle("Weapon Repel", false, function(state) AntiAura.Repel = state end)
-    DefSec:AddToggle("Phase Mode (No Collide)", false, function(state) AntiAura.Phase = state end)
-    DefSec:AddToggle("Heal Aura", false, function(state) AntiAura.HealAura = state end)
-    DefSec:AddButton("Emergency Heal", function()
-        local myChar = player.Character
-        if myChar then
-            local hum = myChar:FindFirstChild("Humanoid")
-            if hum then
-                hum.Health = hum.MaxHealth
-                Library:Notify({Title = "Healed", Description = "Health restored."})
+        -- 1000x: Buy MULTIPLE items per cycle if affordable
+        local bought = 0
+        for _, btnData in ipairs(_buf_buttons) do
+            if cash >= btnData.Cost and bought < 3 then
+                for _, part in ipairs(getTouchableParts(btnData.Model)) do
+                    pcall(firetouchinterest, root, part, 0)
+                    pcall(firetouchinterest, root, part, 1)
+                end
+                cash = cash - btnData.Cost
+                bought = bought + 1
             end
         end
+        if bought > 0 then lastBuyTime = tick() end
     end)
 end
 
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 36: BUILD ZYRONX UI – SENTINEL AI TAB (NEW)               ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-do
-    local AITab = Window:CreateTab("Sentinel AI")
-    if not AITab then warn("[EXO] Sentinel AI tab failed") end
-    local AIPage = AITab:CreatePage("Brain")
-
-    local AIControlSec = AIPage:CreateSection("AI Control")
-    AIControlSec:AddToggle("Enable Sentinel AI", true, function(state)
-        KillNotifEnabled = state
-        KillLogEnabled = state
-        if state then
-            Chat_CreateGUI()
-            Chat_AddMessage("AI", "Sentinel AI activated. I'm watching your back. Enable Kill Notifications to feed me data.", Color3.fromRGB(0, 255, 100))
-            Library:Notify({Title = "Sentinel AI", Description = "AI Combat Brain ONLINE. Chat overlay active."})
-        end
-    end)
-    AIControlSec:AddToggle("Auto-Analyze Kills", true, function(state)
-        KillNotifEnabled = state
-    end)
-    AIControlSec:AddButton("Open AI Chat", function()
-        Chat_CreateGUI()
-        Chat_AddMessage("AI", "Chat opened. Type 'help' for commands.")
-    end)
-    AIControlSec:AddButton("Disable All AI Features", function()
-        Aura.Enabled = false; stopAuraLoop()
-        InstaKillEnabled = false; stopInstaKill()
-        HitAmpEnabled = false; stopHitAmplifier()
-        AntiAura.Enabled = false; stopAntiAura()
-        Reach = false; stopReach()
-        Chat_AddMessage("AI", "All AI-activated features disabled.", Color3.fromRGB(255, 200, 0))
-    end)
-
-    local AIInfoSec = AIPage:CreateSection("AI Intelligence")
-    AIInfoSec:AddLabel("Bayesian Threat Profiler: Per-player pattern tracking")
-    AIInfoSec:AddLabel("Adaptive Strategy Engine: Mutates on failure")
-    AIInfoSec:AddLabel("Neural Memory System: Learns from outcomes")
-    AIInfoSec:AddLabel("Temporal Pattern Analysis: Detects burst kills")
-    AIInfoSec:AddLabel("Chat System: Full bidirectional conversation")
-    AIInfoSec:AddLabel("Robot Analyst: Animated kill report processor")
-    AIInfoSec:AddLabel("Confirmation Gate: AI asks before acting")
-    AIInfoSec:AddButton("View All Threat Profiles", function()
-        local count = 0
-        for name, prof in pairs(ThreatProfiles) do
-            count = count + 1
-            Library:Notify({
-                Title = "Profile: " .. name,
-                Description = "Kills: " .. prof.TotalKills .. " | Threat: " .. prof.ThreatScore
-                    .. "/100\nFeatures: " .. table.concat(prof.SuspectedFeatures, ", "),
-                Duration = 4,
-            })
-        end
-        if count == 0 then
-            Library:Notify({Title = "Profiles", Description = "No threat profiles yet."})
-        end
-    end)
-    AIInfoSec:AddButton("Reset All Profiles", function()
-        ThreatProfiles = {}
-        writeJSON(AI_PROFILE_FILE, ThreatProfiles)
-        Library:Notify({Title = "Profiles", Description = "All threat profiles cleared."})
-    end)
-    AIInfoSec:AddButton("Reset AI Memory", function()
-        AIMemory = {StrategyResults = {}, FeatureEffectiveness = {}, OpponentAdaptations = {}, SessionLearningRate = 0.1}
-        writeJSON(AI_MEMORY_FILE, AIMemory)
-        Library:Notify({Title = "Memory", Description = "AI memory reset. Learning rate restored."})
-    end)
+local function stopAutoBuild()
+    if buildConn then buildConn:Disconnect(); buildConn = nil end
 end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 37: BUILD ZYRONX UI – SETTINGS TAB                        ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-do
-    local SettingsTab = Window:CreateTab("Settings")
-    if not SettingsTab then warn("[EXO] Settings tab failed") end
-    local SettingsPage = SettingsTab:CreatePage("Config")
-
-    local GenSec = SettingsPage:CreateSection("General")
-    GenSec:AddToggle("Anti-Lag Shield", false, function(state)
-        AntiLagEnabled = state
-        if state then startAntiLag() else stopAntiLag() end
-    end)
-    GenSec:AddToggle("ESP (Threat-Colored)", false, function(state)
-        ESPEnabled = state
-        if state then startESP() else stopESP() end
-    end)
-    GenSec:AddToggle("Kill Notifications", false, function(state)
-        KillNotifEnabled = state
-        if state then
-            Library:Notify({Title = "Kill Notifications", Description = "Behavioral analysis + Sentinel AI enabled."})
-        end
-    end)
-    GenSec:AddToggle("Kill Logs", false, function(state) KillLogEnabled = state end)
-    GenSec:AddButton("View Kill Logs", function()
-        if #KillLogs == 0 then
-            Library:Notify({Title = "Kill Logs", Description = "No kills recorded yet."})
-            return
-        end
-        local lastLog = KillLogs[#KillLogs]
-        Library:Notify({
-            Title = "Last Kill Log",
-            Description = "Killer: " .. lastLog.Killer .. "\nWeapon: " .. lastLog.Weapon
-                .. "\nThreat: " .. lastLog.Threat .. "/10\nTTK: " .. string.format("%.2f", lastLog.TTK) .. "s\nTotal logs: " .. #KillLogs,
-            Duration = 5,
-        })
-    end)
-
-    local ConfigSec = SettingsPage:CreateSection("Configuration")
-    ConfigSec:AddButton("Save Config", function()
-        local config = {
-            ReachSize = ReachSize,
-            ThreatRadius = ThreatRadius,
-            latencyEstimate = latencyEstimate,
-            IK_BurstCount = IK_BurstCount,
-            HA_Range = HA_Range.X,
-            HA_BurstCount = HA_BurstCount,
-            TG_BurstCount = TG_BurstCount,
-            AntiAura_RepelForce = AntiAura.RepelForce,
-            AntiAura_RepelRadius = AntiAura.RepelRadius,
-        }
-        writeJSON(CONFIG_FILE, config)
-        Library:Notify({Title = "Config Saved", Description = "Settings saved."})
-    end)
-    ConfigSec:AddButton("Load Config", function()
-        local config = readJSON(CONFIG_FILE)
-        if config then
-            ReachSize = config.ReachSize or 3
-            ThreatRadius = config.ThreatRadius or 60
-            latencyEstimate = config.latencyEstimate or 0.08
-            IK_BurstCount = config.IK_BurstCount or 12
-            HA_Range = Vector3.new(config.HA_Range or 45, config.HA_Range or 45, config.HA_Range or 45)
-            HA_BurstCount = config.HA_BurstCount or 8
-            TG_BurstCount = config.TG_BurstCount or 12
-            AntiAura.RepelForce = config.AntiAura_RepelForce or 120
-            AntiAura.RepelRadius = config.AntiAura_RepelRadius or 18
-            Library:Notify({Title = "Config Loaded", Description = "Settings restored."})
-        else
-            Library:Notify({Title = "No Config", Description = "No saved config found."})
-        end
-    end)
-    ConfigSec:AddButton("Rejoin Server", function()
-        TeleportService:Teleport(game.PlaceId, player)
-    end)
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 38: BUILD ZYRONX UI – UPDATES TAB                         ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-do
-    local UpdatesTab = Window:CreateTab("Updates")
-    if not UpdatesTab then warn("[EXO] Updates tab failed") end
-    local UpdatesPage = UpdatesTab:CreatePage("Changelog")
-    local ChangeSec = UpdatesPage:CreateSection("EXO Hub Changelog")
-    ChangeSec:AddLabel("v9.0 - SENTINEL AI: OMNISCIENT (CURRENT)")
-    ChangeSec:AddLabel("  - NEW: Bayesian Threat Inference Engine")
-    ChangeSec:AddLabel("  - NEW: Neural Memory System (learns from outcomes)")
-    ChangeSec:AddLabel("  - NEW: Adaptive Strategy Mutation (evolves on failure)")
-    ChangeSec:AddLabel("  - NEW: Temporal Kill Pattern Analysis")
-    ChangeSec:AddLabel("  - NEW: Animated Robot Kill Analyst")
-    ChangeSec:AddLabel("  - NEW: Persistent Bidirectional Chat")
-    ChangeSec:AddLabel("  - NEW: Confirmation Gate (asks before acting)")
-    ChangeSec:AddLabel("  - NEW: AI explains WHY you're losing")
-    ChangeSec:AddLabel("  - FIX: UI guaranteed visible (triple-redundancy)")
-    ChangeSec:AddLabel("  - FIX: Mobile-first touch toggle")
-    ChangeSec:AddLabel("  - 1000x: Aura (multi-vector, triple remote, multi-hitbox)")
-    ChangeSec:AddLabel("  - 1000x: InstaKill (120Hz, parallel, 9 hitboxes)")
-    ChangeSec:AddLabel("  - 1000x: HitAmp (360 sphere+box, multi-pulse)")
-    ChangeSec:AddLabel("  - 1000x: AntiAura (heal, boosted repel, phase)")
-    ChangeSec:AddLabel("  - 1000x: ESP (threat-colored, names, distance)")
-    ChangeSec:AddLabel("  - 1000x: Tycoon (multi-buy, expanded claim)")
-    ChangeSec:AddLabel("  - 1000x: Reach (dynamic, up to 15x)")
-    ChangeSec:AddLabel("  - UI: ZyronX Blue + Unlimited Tabs + Mobile")
-    ChangeSec:AddLabel("  - 40 sections, zero compression, all features preserved")
-    ChangeSec:AddLabel(" ")
-    ChangeSec:AddLabel("v8.0 - SENTINEL AI")
-    ChangeSec:AddLabel("v7.0 - UNLIMITED POWER")
-    ChangeSec:AddLabel("v6.0 - GODLY TIER")
-    ChangeSec:AddLabel("v5.0 - WindUI Edition")
-    ChangeSec:AddLabel("v4.0 - Embedded/Velocity/Cerberus")
-    ChangeSec:AddLabel("v3.0 - ZyronX migration")
-    ChangeSec:AddLabel("v1.1 - Initial release")
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 39: POST-BUILD VALIDATION                                 ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-task.spawn(function()
-    task.wait(1.0)
-    -- Validate all critical systems initialized
-    local validationPassed = true
-    local issues = {}
-
-    if not Window or not Window.MainFrame then
-        validationPassed = false
-        table.insert(issues, "Window/MainFrame missing")
-    end
-    if not GlobalNotifContainer then
-        validationPassed = false
-        table.insert(issues, "Notification container missing")
-    end
-    if #Window.Tabs < 7 then
-        validationPassed = false
-        table.insert(issues, "Missing tabs: expected 7+, got " .. #Window.Tabs)
-    end
-    if not scansComplete then
-        table.insert(issues, "Scans still running (non-fatal)")
-    end
-
-    if validationPassed then
-        print("[EXO] ✓ Post-build validation PASSED")
-    else
-        warn("[EXO] ✗ Post-build validation ISSUES: " .. table.concat(issues, ", "))
-    end
-end)
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 40: SETUP & FINALIZE                                      ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-setupKillNotifications()
-
-Library:Notify({
-    Title = "EXO Hub v9.0 – SENTINEL AI: OMNISCIENT",
-    Description = "All systems online. 40 sections. Zero compression.\nTap EXO sphere to toggle UI.\nEnable Kill Notifications to feed the AI.\nType 'help' in chat for commands.",
-    Duration = 6,
-})
-
-print("═══════════════════════════════════════════════════════════")
-print("[EXO] Hub v9.0 SENTINEL AI: OMNISCIENT loaded.")
-print("[EXO] Build: " .. _EXO_BUILD)
-print("[EXO] Architecture: 40 sections, zero compression")
-print("[EXO] AI: Bayesian profiler + Neural memory + Strategy mutation")
-print("[EXO] UI: ZyronX Blue, unlimited tabs, mobile-first")
-print("[EXO] Mobile: Tap EXO sphere to open/close. Drag top bar to move.")
-print("[EXO] Chat Commands: help, status, profiles, profile [name],")
-print("[EXO]   threats, strategy, target [name], disable all, why,")
-print("[EXO]   memory, clear")
-print("[EXO] AI Pipeline: Die → Robot analyzes → Chat opens → Confirm → Execute")
-print("═══════════════════════════════════════════════════════════")
