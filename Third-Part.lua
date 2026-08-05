@@ -1,4 +1,417 @@
 -- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 19: 1000x TOOL FOLLOW (PREDICTIVE VELOCITY TRACKING)     ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local cachedToolParts = {}
+local function updateToolCache()
+    table.clear(cachedToolParts)
+    local char = player.Character
+    if not char then return end
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") then
+            local part = getToolPart(tool)
+            if part then table.insert(cachedToolParts, part) end
+        end
+    end
+end
+
+local function startToolFollow()
+    if ToolFollow.Connection then ToolFollow.Connection:Disconnect() end
+    ToolFollow.Connection = RunService.PreSimulation:Connect(function()
+        if not ToolFollow.Enabled or #ToolFollow.Targets == 0 then return end
+        updateToolCache()
+        for _, targetPlr in ipairs(ToolFollow.Targets) do
+            local tChar = targetPlr.Character
+            if tChar and tChar:FindFirstChild("Humanoid") and tChar.Humanoid.Health > 0 then
+                local torso = tChar:FindFirstChild("UpperTorso") or tChar:FindFirstChild("Torso")
+                if torso then
+                    -- 1000x: Predictive positioning using velocity
+                    local vel = torso.Velocity
+                    local predictedPos = torso.Position + vel * 0.08 + Vector3.new(0, 0.8, 0.5)
+                    for _, part in ipairs(cachedToolParts) do
+                        if part and part.Parent then
+                            part.Position = predictedPos
+                            part.CanCollide = false
+                            part.Massless = true
+                            part.Anchored = false
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function stopToolFollow()
+    if ToolFollow.Connection then ToolFollow.Connection:Disconnect(); ToolFollow.Connection = nil end
+end
+
+player.CharacterAdded:Connect(function(char)
+    char:WaitForChild("HumanoidRootPart")
+    updateToolCache()
+end)
+updateToolCache()
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 20: 1000x AUTO CLAIM & ADAPTIVE BUILD                     ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function startClaimMoney()
+    if claimConn then claimConn:Disconnect() end
+    claimConn = RunService.PreSimulation:Connect(function()
+        if not AutoClaimMoney then return end
+        local myChar = player.Character
+        if not myChar then return end
+        local root = myChar:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local tycoonType = getPlayerTycoonType()
+        if not tycoonType then return end
+        local tycoonFolder = workspace:FindFirstChild("Tycoons") and workspace.Tycoons:FindFirstChild(tycoonType)
+        if not tycoonFolder then return end
+        -- Scan for ALL cash registers and money collectors
+        for _, obj in ipairs(tycoonFolder:GetDescendants()) do
+            local n = obj.Name:lower()
+            if n:find("cash") or n:find("register") or n:find("collect") or n:find("money") then
+                if obj:IsA("Model") or obj:IsA("BasePart") then
+                    for _, part in ipairs(getTouchableParts(obj)) do
+                        pcall(firetouchinterest, root, part, 0)
+                        pcall(firetouchinterest, root, part, 1)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function stopClaimMoney()
+    if claimConn then claimConn:Disconnect(); claimConn = nil end
+end
+
+local lastBuyTime = 0
+local function startAutoBuild()
+    if buildConn then buildConn:Disconnect() end
+    buildConn = RunService.PreSimulation:Connect(function()
+        updateThreatLevel()
+        if not AutoBuild then return end
+        if tick() - lastBuyTime < 0.2 then return end  -- 1000x: faster buy cycle
+        local myChar = player.Character
+        if not myChar then return end
+        local root = myChar:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local tycoonType = getPlayerTycoonType()
+        if not tycoonType then return end
+        local tycoonFolder = workspace:FindFirstChild("Tycoons") and workspace.Tycoons:FindFirstChild(tycoonType)
+        if not tycoonFolder then return end
+        local cash = getPlayerCash()
+
+        table.clear(_buf_buttons)
+        for _, obj in ipairs(tycoonFolder:GetDescendants()) do
+            if obj:IsA("Model") then
+                local cost = getCost(obj)
+                if cost > 0 then
+                    table.insert(_buf_buttons, {Model = obj, Cost = cost, Priority = getPriority(obj.Name)})
+                end
+            end
+        end
+
+        table.sort(_buf_buttons, function(a, b)
+            if a.Priority == b.Priority then return a.Cost < b.Cost end
+            return a.Priority < b.Priority
+        end)
+
+        -- 1000x: Buy MULTIPLE items per cycle if affordable
+        local bought = 0
+        for _, btnData in ipairs(_buf_buttons) do
+            if cash >= btnData.Cost and bought < 3 then
+                for _, part in ipairs(getTouchableParts(btnData.Model)) do
+                    pcall(firetouchinterest, root, part, 0)
+                    pcall(firetouchinterest, root, part, 1)
+                end
+                cash = cash - btnData.Cost
+                bought = bought + 1
+            end
+        end
+        if bought > 0 then lastBuyTime = tick() end
+    end)
+end
+
+local function stopAutoBuild()
+    if buildConn then buildConn:Disconnect(); buildConn = nil end
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 21: 1000x ANTI-AURA (SHIELD STACK + HEAL + REFLECT)      ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function startAntiAura()
+    if antiAuraConn then antiAuraConn:Disconnect() end
+    antiAuraConn = RunService.Heartbeat:Connect(function()
+        if not AntiAura.Enabled then return end
+        local myChar = player.Character
+        if not myChar then return end
+        local root = myChar:FindFirstChild("HumanoidRootPart")
+        local hum = myChar:FindFirstChild("Humanoid")
+        if not root or not hum then return end
+
+        -- GOD MODE: ForceField + auto-heal
+        if AntiAura.GodMode then
+            if not antiAuraFF or not antiAuraFF.Parent then
+                antiAuraFF = Instance.new("ForceField")
+                antiAuraFF.Visible = false
+                antiAuraFF.Parent = myChar
+            end
+            if hum.Health < hum.MaxHealth * 0.7 then
+                hum.Health = hum.MaxHealth
+            end
+        else
+            if antiAuraFF and antiAuraFF.Parent then
+                antiAuraFF:Destroy()
+                antiAuraFF = nil
+            end
+        end
+
+        -- HEAL AURA: Continuous regeneration
+        if AntiAura.HealAura then
+            if hum.Health < hum.MaxHealth then
+                hum.Health = math.min(hum.MaxHealth, hum.Health + hum.MaxHealth * 0.05)
+            end
+        end
+
+        -- 1000x REPEL: Extended radius + boosted force + ALL tools
+        if AntiAura.Repel then
+            for _, otherPlr in ipairs(Players:GetPlayers()) do
+                if otherPlr ~= player and otherPlr.Character then
+                    for _, tool in ipairs(otherPlr.Character:GetChildren()) do
+                        if tool:IsA("Tool") then
+                            local handle = tool:FindFirstChild("Handle")
+                            if handle then
+                                local dist = (handle.Position - root.Position).Magnitude
+                                if dist < AntiAura.RepelRadius then
+                                    local dir = (root.Position - handle.Position).Unit
+                                    pcall(function()
+                                        handle.AssemblyLinearVelocity = dir * AntiAura.RepelForce
+                                        handle.CanCollide = false
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- PHASE: Full no-collide on all parts
+        if AntiAura.Phase then
+            for _, part in ipairs(myChar:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function stopAntiAura()
+    if antiAuraConn then antiAuraConn:Disconnect(); antiAuraConn = nil end
+    if antiAuraFF and antiAuraFF.Parent then antiAuraFF:Destroy(); antiAuraFF = nil end
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 22: 1000x REACH (DYNAMIC THREAT-BASED SIZING)            ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local reachOriginalSizes = {}
+local reachHL = {}
+
+local function applyReach()
+    local myChar = player.Character
+    if not myChar then return end
+    for _, t in ipairs(myChar:GetChildren()) do
+        if t:IsA("Tool") then
+            local part = getToolPart(t)
+            if part then
+                if not reachOriginalSizes[part] then
+                    reachOriginalSizes[part] = part.Size
+                end
+                part.Size = reachOriginalSizes[part] * ReachSize
+                part.Massless = true
+                part.CanCollide = false
+                if not reachHL[part] then
+                    local hl = Instance.new("Highlight", part)
+                    hl.FillTransparency = 1
+                    hl.OutlineColor = AccentColor
+                    reachHL[part] = hl
+                end
+            end
+        end
+    end
+end
+
+local function stopReach()
+    for part, hl in pairs(reachHL) do
+        if hl and hl.Parent == part then hl:Destroy() end
+    end
+    table.clear(reachHL)
+    for part, origSize in pairs(reachOriginalSizes) do
+        if part and part.Parent then part.Size = origSize end
+    end
+    table.clear(reachOriginalSizes)
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 23: 1000x FAST RESPAWN                                   ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function startFastRespawn()
+    local Guide = ReplicatedStorage:FindFirstChild("Guide")
+    local last = 0
+    local function respawn()
+        if tick() - last < 0.02 then return end  -- 1000x: faster threshold
+        last = tick()
+        pcall(function()
+            if Guide then Guide:FireServer() else player:LoadCharacter() end
+        end)
+    end
+    local function hook(c)
+        local hum = c:WaitForChild("Humanoid")
+        hum.HealthChanged:Connect(function(hp) if hp <= 0 then respawn() end end)
+        hum.Died:Connect(respawn)
+    end
+    if player.Character then hook(player.Character) end
+    player.CharacterAdded:Connect(hook)
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 24: 1000x INSTA-KILL (PARALLEL MULTI-BURST + SWEEP)      ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function IK_RefreshTools()
+    table.clear(IK_ToolsCache)
+    local char = player.Character
+    if not char then return end
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") then
+            local fightEvent = tool:FindFirstChild("FightEvent", true)
+            local touchPart = tool:FindFirstChildWhichIsA("TouchTransmitter", true)
+            if fightEvent and fightEvent:IsA("RemoteEvent") then
+                table.insert(IK_ToolsCache, {
+                    Tool = tool,
+                    FightEvent = fightEvent,
+                    TouchPart = touchPart and touchPart.Parent or nil
+                })
+            elseif touchPart then
+                table.insert(IK_ToolsCache, {
+                    Tool = tool,
+                    FightEvent = nil,
+                    TouchPart = touchPart.Parent
+                })
+            end
+        end
+    end
+    -- Also scan Backpack
+    local bp = player:FindFirstChildOfClass("Backpack")
+    if bp then
+        for _, tool in ipairs(bp:GetChildren()) do
+            if tool:IsA("Tool") then
+                local fightEvent = tool:FindFirstChild("FightEvent", true)
+                if fightEvent and fightEvent:IsA("RemoteEvent") then
+                    table.insert(IK_ToolsCache, {
+                        Tool = tool,
+                        FightEvent = fightEvent,
+                        TouchPart = nil
+                    })
+                end
+            end
+        end
+    end
+end
+
+local function IK_GetTarget()
+    local myChar = player.Character
+    local myRoot = myChar and getHRP(myChar)
+    if not myRoot then return nil end
+    local bestChar, bestDist = nil, 50  -- 1000x: expanded range
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local char = plr.Character
+            if char then
+                local root = getHRP(char)
+                if root then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health > 0 then
+                        local dist = (root.Position - myRoot.Position).Magnitude
+                        if dist < bestDist then
+                            bestDist = dist
+                            bestChar = char
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return bestChar
+end
+
+local function IK_MicroBurst(targetChar, burstCount)
+    if not targetChar or not player.Character then return end
+    -- 1000x: ALL body parts targeted
+    table.clear(IK_TargetParts)
+    for _, name in ipairs({"HumanoidRootPart", "UpperTorso", "Torso", "Head",
+                           "LowerTorso", "LeftUpperArm", "RightUpperArm",
+                           "LeftUpperLeg", "RightUpperLeg"}) do
+        local part = targetChar:FindFirstChild(name)
+        if part and part:IsA("BasePart") then
+            table.insert(IK_TargetParts, part)
+        end
+    end
+    if #IK_TargetParts == 0 then return end
+
+    -- PARALLEL FIRE: All tools simultaneously
+    for _, toolData in ipairs(IK_ToolsCache) do
+        local tool = toolData.Tool
+        local fight = toolData.FightEvent
+        local touch = toolData.TouchPart
+        if tool and tool.Parent then
+            if fight then
+                pcall(function()
+                    for _ = 1, burstCount do fight:FireServer() end
+                end)
+            else
+                pcall(tool.Activate, tool)
+            end
+            if touch then
+                for _, part in ipairs(IK_TargetParts) do
+                    if part and part.Parent then
+                        pcall(firetouchinterest, touch, part, 0)
+                        pcall(firetouchinterest, touch, part, 1)
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function startInstaKill()
+    if InstaKillConn then InstaKillConn:Disconnect() end
+    IK_RefreshTools()
+    InstaKillConn = RunService.PreSimulation:Connect(function()
+        if not InstaKillEnabled then return end
+        local now = os.clock()
+        if now - IK_LastActivation < 1/120 then return end  -- 1000x: 120Hz
+        IK_LastActivation = now
+        IK_RefreshTools()
+        if #IK_ToolsCache == 0 then return end
+
+        local adaptiveBurst = IK_BurstCount
+        if IK_AdaptiveBurst and ThreatLevel > 2 then
+            adaptiveBurst = IK_BurstCount + ThreatLevel * 2  -- 1000x scaling
+        end
+        local target = IK_GetTarget()
+        if target then
+            IK_MicroBurst(target, adaptiveBurst)
+        end
+    end)
+end
+
+local function stopInstaKill()
+    if InstaKillConn then InstaKillConn:Disconnect(); InstaKillConn = nil end
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
 -- ║  SECTION 25: 1000x HIT AMPLIFIER (360 SWEEP + MULTI-PULSE)        ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
 local HA_OverlapParams = OverlapParams.new()
@@ -450,564 +863,3 @@ end
 local function stopNoCooldown()
     if NoCooldownConn then NoCooldownConn:Disconnect(); NoCooldownConn = nil end
 end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 31: BUILD ZYRONX UI (ALL TABS + SENTINEL AI TAB)         ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local Window = Library:CreateWindow({
-    Title = "EXO Hub v8.0",
-    Subtitle = "SENTINEL AI | BLUE EDITION",
-    SubtitleColor = AccentColor,
-    SphereText = true,
-    SphereWords = "EXO",
-})
-
--- ═══════════════════════════════════════════════════════════════════════
---  TAB 1: SPT COMBAT (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local CombatTab = Window:CreateTab("Combat", true)
-    local CombatPage = CombatTab:CreatePage("Main")
-
-    local AuraSec = CombatPage:CreateSection("1000x Multi-Target Aura")
-    AuraSec:AddToggle("Enable Aura", false, function(state)
-        Aura.Enabled = state
-        if state then
-            Aura.TargetList = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(Aura.TargetList, plr) end
-            end
-            startAuraLoop()
-            Library:Notify({Title = "Aura", Description = "ENGAGED - " .. #Aura.TargetList .. " targets. Multi-vector prediction active."})
-        else stopAuraLoop() end
-    end)
-    AuraSec:AddToggle("Instant Kill", false, function(state) InstantKill = state end)
-    AuraSec:AddSlider("Prediction Depth", 3, 30, 8, function(val) latencyEstimate = val / 100 end)
-    AuraSec:AddDropdown("Aura Targets", getServerPlayers(), true, function(selected)
-        table.clear(Aura.TargetList)
-        if selected then
-            for _, name in ipairs(selected) do
-                local plr = Players:FindFirstChild(name)
-                if plr then table.insert(Aura.TargetList, plr) end
-            end
-        end
-    end)
-
-    local ToolFollowSec = CombatPage:CreateSection("1000x Tool Follow")
-    ToolFollowSec:AddToggle("Enable Tool Follow", false, function(state)
-        ToolFollow.Enabled = state
-        if state then
-            ToolFollow.Targets = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(ToolFollow.Targets, plr) end
-            end
-            startToolFollow()
-        else stopToolFollow() end
-    end)
-
-    local DefenseSec = CombatPage:CreateSection("1000x Defense / Anti-Aura")
-    DefenseSec:AddToggle("Enable Anti-Aura", false, function(state)
-        AntiAura.Enabled = state
-        if state then startAntiAura() else stopAntiAura() end
-    end)
-    DefenseSec:AddToggle("God Mode (ForceField)", false, function(state) AntiAura.GodMode = state end)
-    DefenseSec:AddToggle("Repel (Anti-Touch)", false, function(state) AntiAura.Repel = state end)
-    DefenseSec:AddToggle("Phase (No Collide)", false, function(state) AntiAura.Phase = state end)
-    DefenseSec:AddToggle("Heal Aura", false, function(state) AntiAura.HealAura = state end)
-    DefenseSec:AddSlider("Repel Force", 50, 300, 120, function(val) AntiAura.RepelForce = val end)
-    DefenseSec:AddSlider("Repel Radius", 8, 30, 18, function(val) AntiAura.RepelRadius = val end)
-    DefenseSec:AddToggle("Anti Spawnkill", false, function(state)
-        AntiSpawnkill = state
-        if state then
-            player.CharacterAdded:Connect(function(c)
-                local hum = c:WaitForChild("Humanoid")
-                hum.MaxHealth = 9e9; hum.Health = 9e9
-                local ff = Instance.new("ForceField", c); ff.Visible = false
-                task.delay(5, function()
-                    if hum and hum.Parent then hum.MaxHealth = 100; hum.Health = 100 end
-                    if ff then ff:Destroy() end
-                end)
-            end)
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  TAB 2: SPT TYCOON (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local TycoonTab = Window:CreateTab("Tycoon")
-    local TycoonPage = TycoonTab:CreatePage("Automation")
-
-    local TycoonSec = TycoonPage:CreateSection("1000x Tycoon Automation")
-    TycoonSec:AddToggle("Auto Claim Money", false, function(state)
-        AutoClaimMoney = state
-        if state then startClaimMoney() else stopClaimMoney() end
-    end)
-    TycoonSec:AddToggle("Smart Auto Build (Multi-Buy)", false, function(state)
-        AutoBuild = state
-        if state then startAutoBuild() else stopAutoBuild() end
-    end)
-    TycoonSec:AddToggle("Auto Grab Weapons", false, function(state)
-        AutoGetTools = state
-        if state then
-            if grabLoopConn then grabLoopConn:Disconnect() end
-            grabLoopConn = RunService.PreSimulation:Connect(function()
-                if not AutoGetTools then return end
-                local myChar = player.Character
-                if not myChar then return end
-                local root = myChar:FindFirstChild("HumanoidRootPart")
-                if not root then return end
-                for _, rule in ipairs(TG_TOOL_RULES) do
-                    if not TG_HasTool(rule.Pattern) then
-                        local pad = TG_GetClosestPad(rule.Base)
-                        if pad then
-                            for _ = 1, TG_BurstCount do
-                                pcall(firetouchinterest, root, pad, 0)
-                                pcall(firetouchinterest, root, pad, 1)
-                            end
-                        end
-                    end
-                end
-            end)
-        else
-            if grabLoopConn then grabLoopConn:Disconnect(); grabLoopConn = nil end
-        end
-    end)
-
-    local CooldownSec = TycoonPage:CreateSection("Tools & Cooldown")
-    CooldownSec:AddToggle("Auto Use Tools (0 delay)", false, function(state)
-        AutoTools = state
-        if state then
-            toolLoopConn = RunService.RenderStepped:Connect(function()
-                if not AutoTools then return end
-                local myChar = player.Character
-                if not myChar then return end
-                for _, t in ipairs(myChar:GetChildren()) do
-                    if t:IsA("Tool") then pcall(function() t:Activate() end) end
-                end
-                for _, t in ipairs(player.Backpack:GetChildren()) do
-                    if t:IsA("Tool") then t.Parent = myChar; pcall(function() t:Activate() end) end
-                end
-            end)
-        else
-            if toolLoopConn then toolLoopConn:Disconnect(); toolLoopConn = nil end
-        end
-    end)
-    CooldownSec:AddToggle("No Cooldown (SAFE)", false, function(state)
-        NoCooldown = state
-        if state then startNoCooldown() else stopNoCooldown() end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  TAB 3: SPT MISC (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local MiscTab = Window:CreateTab("Misc")
-    local MiscPage = MiscTab:CreatePage("Utilities")
-
-    local ReachSec = MiscPage:CreateSection("1000x Reach")
-    ReachSec:AddToggle("Enable Reach", false, function(state)
-        Reach = state
-        if state then applyReach() else stopReach() end
-    end)
-    ReachSec:AddSlider("Reach Size", 1, 15, 3, function(val)
-        ReachSize = val
-        if Reach then stopReach(); applyReach() end
-    end)
-
-    local RespawnSec = MiscPage:CreateSection("Respawn & Protection")
-    RespawnSec:AddToggle("Fast Respawn", false, function(state)
-        FastRespawn = state
-        if state then startFastRespawn() end
-    end)
-
-    local UtilsSec = MiscPage:CreateSection("Remote Configuration")
-    UtilsSec:AddTextbox("Set Damage Remote", "game.ReplicatedStorage.DealDamage", function(text)
-        if text and text ~= "" then
-            local ok, remote = pcall(function() return loadstring("return " .. text)() end)
-            if ok and remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
-                DAMAGE_REMOTE = remote
-                Library:Notify({Title = "Remote Set", Description = "Damage remote updated."})
-            else
-                Library:Notify({Title = "Error", Description = "Invalid remote path."})
-            end
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  TAB 4: MPT KILL ENGINE (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local KillTab = Window:CreateTab("Kill Engine")
-    local KillPage = KillTab:CreatePage("Omni-Kill")
-
-    local OmniSec = KillPage:CreateSection("1000x Omni-Kill Engine")
-    OmniSec:AddToggle("Enable Omni-Kill", false, function(state)
-        Aura.Enabled = state; InstantKill = state
-        if state then
-            Aura.TargetList = {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player then table.insert(Aura.TargetList, plr) end
-            end
-            startAuraLoop()
-            Library:Notify({Title = "OMNI-KILL", Description = "ENGAGED - " .. #Aura.TargetList .. " targets."})
-        else stopAuraLoop() end
-    end)
-    OmniSec:AddToggle("Insta-Kill Micro-Burst", false, function(state)
-        InstaKillEnabled = state
-        if state then startInstaKill() else stopInstaKill() end
-    end)
-    OmniSec:AddToggle("Adaptive Burst (Threat-Based)", true, function(state)
-        IK_AdaptiveBurst = state
-    end)
-    OmniSec:AddSlider("Prediction Aggression", 3, 30, 8, function(val) latencyEstimate = val / 100 end)
-    OmniSec:AddSlider("Burst Count", 3, 20, 12, function(val) IK_BurstCount = val end)
-    OmniSec:AddButton("Manual Kill Burst", function()
-        local orig = Aura.Enabled
-        Aura.Enabled = true; InstantKill = true
-        task.wait(0.15)
-        Aura.Enabled = orig
-        if not orig then InstantKill = false end
-        Library:Notify({Title = "Kill Burst", Description = "Burst fired."})
-    end)
-    OmniSec:AddButton("Refresh Target List", function()
-        table.clear(Aura.TargetList)
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player then table.insert(Aura.TargetList, plr) end
-        end
-        Library:Notify({Title = "Targets", Description = "Refreshed: " .. #Aura.TargetList .. " players."})
-    end)
-
-    local HitAmpSec = KillPage:CreateSection("1000x Hit Amplifier")
-    HitAmpSec:AddToggle("Enable Hit Amplifier", false, function(state)
-        HitAmpEnabled = state
-        if state then startHitAmplifier() else stopHitAmplifier() end
-    end)
-    HitAmpSec:AddSlider("Scan Range", 15, 60, 45, function(val)
-        HA_Range = Vector3.new(val, val, val)
-    end)
-    HitAmpSec:AddSlider("Burst Count", 1, 15, 8, function(val) HA_BurstCount = val end)
-    HitAmpSec:AddToggle("Multi-Pulse (3x waves)", true, function(state) HA_MultiPulse = state end)
-    HitAmpSec:AddLabel("360 sphere+box scan | 6ms cooldown | OverlapParams")
-
-    local ArsenalSec = KillPage:CreateSection("1000x Tool Arsenal")
-    ArsenalSec:AddToggle("Enable Tool Arsenal", false, function(state)
-        TG_Enabled = state
-        if state then
-            if not getgenv().EXO_TG_Loop then
-                getgenv().EXO_TG_Loop = true
-                task.spawn(function()
-                    while getgenv().EXO_TG_Loop do
-                        if TG_Enabled then
-                            local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                            if root then
-                                for _, rule in ipairs(TG_TOOL_RULES) do
-                                    if not TG_HasTool(rule.Pattern) then
-                                        local pad = TG_GetClosestPad(rule.Base)
-                                        if pad then
-                                            for _ = 1, TG_BurstCount do
-                                                pcall(firetouchinterest, root, pad, 0)
-                                                pcall(firetouchinterest, root, pad, 1)
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                        task.wait(0.08)
-                    end
-                end)
-            end
-        else
-            getgenv().EXO_TG_Loop = false
-        end
-    end)
-    ArsenalSec:AddButton("Force Acquire All", function()
-        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            for baseName, _ in pairs(TG_padsByBase) do
-                local pad = TG_GetClosestPad(baseName)
-                if pad then
-                    for _ = 1, TG_BurstCount do
-                        pcall(firetouchinterest, root, pad, 0)
-                        pcall(firetouchinterest, root, pad, 1)
-                    end
-                end
-            end
-            Library:Notify({Title = "Tool Arsenal", Description = "Force acquire burst fired."})
-        end
-    end)
-    ArsenalSec:AddLabel("14 Bases: Stone, Magic, Storm, Robotic, Mecha, Shadow, Hyper, Thunder, Void, Frozen, Magma, Nuclear, Toxic, Kong")
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  TAB 5: MPT ECONOMY (1000x)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local EconTab = Window:CreateTab("Economy")
-    local EconPage = EconTab:CreatePage("Sovereign")
-
-    local SovSec = EconPage:CreateSection("1000x Sovereign Economy")
-    SovSec:AddToggle("Enable Sovereign Economy", false, function(state)
-        AutoClaimMoney = state; AutoBuild = state
-        if state then startClaimMoney(); startAutoBuild()
-        else stopClaimMoney(); stopAutoBuild() end
-    end)
-    SovSec:AddSlider("Defense Threat Radius", 20, 120, 60, function(val) ThreatRadius = val end)
-    SovSec:AddButton("Force Buy Next Upgrade", function()
-        local myChar = player.Character
-        if not myChar then return end
-        local root = myChar:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local tycoonType = getPlayerTycoonType()
-        if not tycoonType then return end
-        local tycoonFolder = workspace:FindFirstChild("Tycoons") and workspace.Tycoons:FindFirstChild(tycoonType)
-        if not tycoonFolder then return end
-        local cash = getPlayerCash()
-        local best, bestPri = nil, 9999
-        for _, obj in ipairs(tycoonFolder:GetDescendants()) do
-            if obj:IsA("Model") then
-                local cost = getCost(obj)
-                local pri = getPriority(obj.Name)
-                if cost > 0 and cost <= cash and pri < bestPri then best = obj; bestPri = pri end
-            end
-        end
-        if best then
-            for _, part in ipairs(getTouchableParts(best)) do
-                pcall(firetouchinterest, root, part, 0)
-                pcall(firetouchinterest, root, part, 1)
-            end
-            Library:Notify({Title = "Purchased", Description = "Bought: " .. best.Name})
-        else
-            Library:Notify({Title = "No Purchase", Description = "Nothing affordable."})
-        end
-    end)
-
-    local SpawnSec = EconPage:CreateSection("Spawn Supremacy")
-    SpawnSec:AddToggle("Supremacy Mode", false, function(state)
-        AntiSpawnkill = state
-        if state then
-            player.CharacterAdded:Connect(function(c)
-                local hum = c:WaitForChild("Humanoid")
-                hum.MaxHealth = 9e9; hum.Health = 9e9
-                local ff = Instance.new("ForceField", c); ff.Visible = false
-                task.delay(5, function()
-                    if hum and hum.Parent then hum.MaxHealth = 100; hum.Health = 100 end
-                    if ff then ff:Destroy() end
-                end)
-            end)
-        end
-    end)
-    SpawnSec:AddToggle("Fast Respawn", false, function(state)
-        FastRespawn = state
-        if state then startFastRespawn() end
-    end)
-
-    local DefSec = EconPage:CreateSection("1000x Defense Matrix")
-    DefSec:AddToggle("Enable Defense Matrix", false, function(state)
-        AntiAura.Enabled = state
-        if state then startAntiAura() else stopAntiAura() end
-    end)
-    DefSec:AddToggle("ForceField God Mode", false, function(state) AntiAura.GodMode = state end)
-    DefSec:AddToggle("Weapon Repel", false, function(state) AntiAura.Repel = state end)
-    DefSec:AddToggle("Phase Mode (No Collide)", false, function(state) AntiAura.Phase = state end)
-    DefSec:AddToggle("Heal Aura", false, function(state) AntiAura.HealAura = state end)
-    DefSec:AddButton("Emergency Heal", function()
-        local myChar = player.Character
-        if myChar then
-            local hum = myChar:FindFirstChild("Humanoid")
-            if hum then
-                hum.Health = hum.MaxHealth
-                Library:Notify({Title = "Healed", Description = "Health restored."})
-            end
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  TAB 6: SENTINEL AI (NEW)
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local AITab = Window:CreateTab("Sentinel AI")
-    local AIPage = AITab:CreatePage("Brain")
-
-    local AIControlSec = AIPage:CreateSection("AI Control")
-    AIControlSec:AddToggle("Enable Sentinel AI", true, function(state)
-        KillNotifEnabled = state
-        KillLogEnabled = state
-        if state then
-            Chat_CreateGUI()
-            Chat_AddMessage("AI", "Sentinel AI activated. I'm watching your back. Enable Kill Notifications to feed me data.", Color3.fromRGB(0, 255, 100))
-            Library:Notify({Title = "Sentinel AI", Description = "AI Combat Brain ONLINE. Chat overlay active."})
-        end
-    end)
-    AIControlSec:AddToggle("Auto-Analyze Kills", true, function(state)
-        KillNotifEnabled = state
-    end)
-    AIControlSec:AddButton("Open AI Chat", function()
-        Chat_CreateGUI()
-        Chat_AddMessage("AI", "Chat opened. Type 'help' for commands.")
-    end)
-    AIControlSec:AddButton("Disable All AI Features", function()
-        Aura.Enabled = false; stopAuraLoop()
-        InstaKillEnabled = false; stopInstaKill()
-        HitAmpEnabled = false; stopHitAmplifier()
-        AntiAura.Enabled = false; stopAntiAura()
-        Reach = false; stopReach()
-        Chat_AddMessage("AI", "All AI-activated features disabled.", Color3.fromRGB(255, 200, 0))
-    end)
-
-    local AIInfoSec = AIPage:CreateSection("AI Intelligence")
-    AIInfoSec:AddLabel("Threat Profiler: Tracks every killer's patterns")
-    AIInfoSec:AddLabel("Strategy Engine: Combines features to counter threats")
-    AIInfoSec:AddLabel("Chat System: Full bidirectional conversation")
-    AIInfoSec:AddLabel("Robot Analyst: Animated kill report processor")
-    AIInfoSec:AddLabel("Confirmation Gate: AI asks before acting")
-    AIInfoSec:AddButton("View All Threat Profiles", function()
-        local count = 0
-        for name, prof in pairs(ThreatProfiles) do
-            count = count + 1
-            Library:Notify({
-                Title = "Profile: " .. name,
-                Description = "Kills: " .. prof.TotalKills .. " | Threat: " .. prof.ThreatScore
-                    .. "/100\nFeatures: " .. table.concat(prof.SuspectedFeatures, ", "),
-                Duration = 4,
-            })
-        end
-        if count == 0 then
-            Library:Notify({Title = "Profiles", Description = "No threat profiles yet."})
-        end
-    end)
-    AIInfoSec:AddButton("Reset All Profiles", function()
-        ThreatProfiles = {}
-        writeJSON(AI_PROFILE_FILE, ThreatProfiles)
-        Library:Notify({Title = "Profiles", Description = "All threat profiles cleared."})
-    end)
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  TAB 7: SETTINGS
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local SettingsTab = Window:CreateTab("Settings")
-    local SettingsPage = SettingsTab:CreatePage("Config")
-
-    local UISec = SettingsPage:CreateSection("General")
-    UISec:AddToggle("Anti-Lag Shield", false, function(state)
-        AntiLagEnabled = state
-        if state then startAntiLag() else stopAntiLag() end
-    end)
-    UISec:AddToggle("ESP (Threat-Colored)", false, function(state)
-        ESPEnabled = state
-        if state then startESP() else stopESP() end
-    end)
-    UISec:AddToggle("Kill Notifications", false, function(state)
-        KillNotifEnabled = state
-        if state then
-            Library:Notify({Title = "Kill Notifications", Description = "Behavioral analysis + Sentinel AI enabled."})
-        end
-    end)
-    UISec:AddToggle("Kill Logs", false, function(state) KillLogEnabled = state end)
-    UISec:AddButton("View Kill Logs", function()
-        if #KillLogs == 0 then
-            Library:Notify({Title = "Kill Logs", Description = "No kills recorded yet."})
-            return
-        end
-        local lastLog = KillLogs[#KillLogs]
-        Library:Notify({
-            Title = "Last Kill Log",
-            Description = "Killer: " .. lastLog.Killer .. "\nWeapon: " .. lastLog.Weapon
-                .. "\nThreat: " .. lastLog.Threat .. "/10\nTTK: " .. string.format("%.2f", lastLog.TTK) .. "s\nTotal logs: " .. #KillLogs,
-            Duration = 5,
-        })
-    end)
-
-    local ConfigSec = SettingsPage:CreateSection("Configuration")
-    ConfigSec:AddButton("Save Config", function()
-        local config = {
-            ReachSize = ReachSize,
-            ThreatRadius = ThreatRadius,
-            latencyEstimate = latencyEstimate,
-            IK_BurstCount = IK_BurstCount,
-            HA_Range = HA_Range.X,
-            HA_BurstCount = HA_BurstCount,
-            TG_BurstCount = TG_BurstCount,
-            AntiAura_RepelForce = AntiAura.RepelForce,
-            AntiAura_RepelRadius = AntiAura.RepelRadius,
-        }
-        writeJSON(CONFIG_FILE, config)
-        Library:Notify({Title = "Config Saved", Description = "Settings saved."})
-    end)
-    ConfigSec:AddButton("Load Config", function()
-        local config = readJSON(CONFIG_FILE)
-        if config then
-            ReachSize = config.ReachSize or 3
-            ThreatRadius = config.ThreatRadius or 60
-            latencyEstimate = config.latencyEstimate or 0.08
-            IK_BurstCount = config.IK_BurstCount or 12
-            HA_Range = Vector3.new(config.HA_Range or 45, config.HA_Range or 45, config.HA_Range or 45)
-            HA_BurstCount = config.HA_BurstCount or 8
-            TG_BurstCount = config.TG_BurstCount or 12
-            AntiAura.RepelForce = config.AntiAura_RepelForce or 120
-            AntiAura.RepelRadius = config.AntiAura_RepelRadius or 18
-            Library:Notify({Title = "Config Loaded", Description = "Settings restored."})
-        else
-            Library:Notify({Title = "No Config", Description = "No saved config found."})
-        end
-    end)
-    ConfigSec:AddButton("Rejoin Server", function()
-        TeleportService:Teleport(game.PlaceId, player)
-    end)
-end
-
--- ═══════════════════════════════════════════════════════════════════════
---  TAB 8: UPDATES
--- ═══════════════════════════════════════════════════════════════════════
-do
-    local UpdatesTab = Window:CreateTab("Updates")
-    local UpdatesPage = UpdatesTab:CreatePage("Changelog")
-    local ChangeSec = UpdatesPage:CreateSection("EXO Hub Changelog")
-    ChangeSec:AddLabel("v8.0 - SENTINEL AI (CURRENT)")
-    ChangeSec:AddLabel("  - NEW: Sentinel AI Combat Brain")
-    ChangeSec:AddLabel("  - NEW: Animated Robot Kill Analyst")
-    ChangeSec:AddLabel("  - NEW: Persistent Bidirectional Chat")
-    ChangeSec:AddLabel("  - NEW: Threat Profiler (per-player)")
-    ChangeSec:AddLabel("  - NEW: Strategy Engine (feature combos)")
-    ChangeSec:AddLabel("  - NEW: Confirmation Gate (asks before acting)")
-    ChangeSec:AddLabel("  - NEW: AI explains WHY you're losing")
-    ChangeSec:AddLabel("  - 1000x: Aura (multi-vector, triple remote, multi-hitbox)")
-    ChangeSec:AddLabel("  - 1000x: InstaKill (120Hz, parallel, 9 hitboxes)")
-    ChangeSec:AddLabel("  - 1000x: HitAmp (360 sphere+box, multi-pulse)")
-    ChangeSec:AddLabel("  - 1000x: AntiAura (heal, boosted repel, phase)")
-    ChangeSec:AddLabel("  - 1000x: ESP (threat-colored, names, distance)")
-    ChangeSec:AddLabel("  - 1000x: Tycoon (multi-buy, expanded claim)")
-    ChangeSec:AddLabel("  - 1000x: Reach (dynamic, up to 15x)")
-    ChangeSec:AddLabel("  - UI: ZyronX Blue + Unlimited Tabs + Mobile")
-    ChangeSec:AddLabel(" ")
-    ChangeSec:AddLabel("v7.0 - UNLIMITED POWER")
-    ChangeSec:AddLabel("v6.0 - GODLY TIER")
-    ChangeSec:AddLabel("v5.0 - WindUI Edition")
-    ChangeSec:AddLabel("v4.0 - Embedded/Velocity/Cerberus")
-    ChangeSec:AddLabel("v3.0 - ZyronX migration")
-    ChangeSec:AddLabel("v1.1 - Initial release")
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 32: SETUP & FINALIZE                                     ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-setupKillNotifications()
-
-Library:Notify({
-    Title = "EXO Hub v8.0 – SENTINEL AI",
-    Description = "All systems online. 1000x UPGRADE. AI Combat Brain ACTIVE.\nTap EXO sphere to toggle UI. Enable Kill Notifications to feed the AI.",
-    Duration = 5,
-})
-
-print("[EXO] Hub v8.0 SENTINEL AI loaded. Build: " .. _EXO_BUILD)
-print("[EXO] Full 32-section architecture. Zero compression. All features preserved.")
-print("[EXO] Mobile: Tap EXO sphere to open/close. Drag top bar to move.")
-print("[EXO] AI: Enable Kill Notifications → die once → robot analyzes → chat opens → confirm strategy")
-print("[EXO] Chat Commands: help, status, profiles, profile [name], threats, strategy, target [name], disable all, why, clear")
