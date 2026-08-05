@@ -1,5 +1,575 @@
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 13: SENTINEL AI – STRATEGY ENGINE                         ║
+-- ║  SECTION 6: STATE VARIABLES (GODLY TIER + AI EXPANDED)             ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+-- Core Combat State
+local DAMAGE_REMOTE       = nil
+local DAMAGE_REMOTE_ALT   = nil
+local DAMAGE_REMOTE_TERT  = nil
+local Aura                = {Enabled = false, TargetList = {}, Mode = "omni", PredictionDepth = 3}
+local InstantKill         = false
+local AutoTools           = false
+local NoCooldown          = false
+local Reach               = false
+local ReachSize           = 3
+local FastRespawn         = false
+local AntiSpawnkill       = false
+local ToolFollow          = {Enabled = false, Targets = {}, Connection = nil}
+local AutoGetTools        = false
+local AutoClaimMoney      = false
+local AutoBuild           = false
+local grabLoopConn        = nil
+local toolLoopConn        = nil
+local auraConn            = nil
+local claimConn           = nil
+local buildConn           = nil
+local cachedTycoonType    = nil
+
+-- GODLY Anti-Aura State (ALL ORIGINAL FIELDS PRESERVED + NEW)
+local AntiAura            = {
+    Enabled = false, GodMode = false, Repel = false,
+    Reflect = false, Phase = false, HealAura = false,
+    ShieldStack = 0, RepelForce = 120, RepelRadius = 18
+}
+local antiAuraConn        = nil
+local antiAuraFF          = nil
+local antiAuraPhaseConn   = nil
+
+-- Threat Detection (GODLY – multi-layer expanded)
+local ThreatLevel         = 0
+local LastThreatCheck     = 0
+local ThreatRadius        = 60
+local ThreatHistory       = {}
+local ThreatTrend         = 0
+local latencyEstimate     = 0.08
+local ThreatDecay         = 0
+local PeakThreat          = 0
+local ThreatVelocity      = {}
+
+-- GODLY Insta-Kill State (EXPANDED)
+local InstaKillEnabled    = false
+local InstaKillConn       = nil
+local IK_ToolsCache       = {}
+local IK_LastActivation   = 0
+local IK_TargetParts      = {}
+local IK_BurstCount       = 12
+local IK_AdaptiveBurst    = true
+local IK_MultiTarget      = true
+local IK_ParallelFire     = true
+local IK_SweepAngle       = 360
+local IK_PenetrationDepth = 3
+
+-- GODLY Hit Amplifier State (EXPANDED)
+local HitAmpEnabled       = false
+local HitAmpConn          = nil
+local HA_CachedTools      = {}
+local HA_LastActivation   = 0
+local HA_Accumulator      = 0
+local HA_Range            = Vector3.new(45, 45, 45)
+local HA_BurstCount       = 8
+local HA_MultiPulse       = true
+local HA_SweepMode        = true
+local HA_PulseInterval    = 0.008
+
+-- GODLY Tool Grabber State (PRESERVED)
+local TG_Enabled          = false
+local TG_padsByBase       = {}
+local TG_registered       = {}
+local TG_WavePriority     = true
+local TG_BurstCount       = 12
+
+-- Kill Intelligence System (EXPANDED FOR AI)
+local KillNotifEnabled    = false
+local KillLogEnabled      = false
+local KillLogs            = {}
+local KillStreak          = 0
+local LastKillTime        = 0
+local DeathCount          = 0
+local LastDeathTime       = 0
+local DeathTimestamps     = {}
+local KillVelocity        = {}
+local LastSpawnTime       = 0
+
+-- ESP & Visuals
+local ESPEnabled          = false
+local AntiLagEnabled      = false
+local espDots             = {}
+local espGui              = nil
+
+-- No Cooldown (SAFE – no global hooks)
+local NoCooldownConn      = nil
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 7: SENTINEL AI – CORE DATA STRUCTURES                     ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+-- AI State Machine
+local AI_State = {
+    Current = "IDLE",
+    LastTransition = 0,
+    PendingAction = nil,
+    PendingStrategy = nil,
+    ConfirmCallback = nil,
+}
+
+-- Threat Profiler – persistent per-player profiles
+local ThreatProfiles = readJSON(AI_PROFILE_FILE) or {}
+
+-- Neural Memory System – tracks strategy success/failure
+local AIMemory = readJSON(AI_MEMORY_FILE) or {
+    StrategyResults = {},
+    FeatureEffectiveness = {},
+    OpponentAdaptations = {},
+    SessionLearningRate = 0.1,
+}
+
+-- Strategy Engine (EXPANDED)
+local StrategyEngine = {
+    ActiveStrategy = nil,
+    StrategyHistory = {},
+    FeatureCombinations = {},
+    LastStrategyTime = 0,
+    SuccessRate = {},
+    MutationRate = 0.15,
+    MaxConcurrentStrategies = 3,
+}
+
+-- Chat System State
+local ChatSystem = {
+    GUI = nil,
+    ScrollFrame = nil,
+    InputBox = nil,
+    SendButton = nil,
+    RobotFrame = nil,
+    RobotLabel = nil,
+    StatusLabel = nil,
+    MessageCount = 0,
+    IsOpen = false,
+    IsTyping = false,
+    PendingQuestion = nil,
+    AwaitingReply = false,
+    ReplyCallback = nil,
+    Dragging = false,
+    DragStart = nil,
+    StartPos = nil,
+}
+
+-- Robot Animation State
+local RobotAnim = {
+    State = "IDLE",
+    Frame = 0,
+    Eyes = nil,
+    Body = nil,
+    Arm = nil,
+}
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 8: PRE-ALLOCATED BUFFERS (ZERO GC PRESSURE)              ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local _buf_parts      = {}
+local _buf_buttons    = {}
+local _buf_wave       = {}
+local _buf_targets    = {}
+local _buf_tools      = {}
+local _buf_players    = {}
+local _buf_remotes    = {}
+local _buf_analysis   = {}
+local _buf_hitboxes   = {}
+local _buf_velocities = {}
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 9: DEFERRED HEAVY SCANS (NON-BLOCKING)                   ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local scansComplete = false
+task.spawn(function()
+    -- Damage remote detection (multi-pass for GODLY coverage)
+    table.clear(_buf_remotes)
+    for _, container in ipairs({ReplicatedStorage, workspace}) do
+        pcall(function()
+            for _, obj in ipairs(container:GetDescendants()) do
+                if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                    local n = obj.Name:lower()
+                    if n:match("damage") or n:match("hit") or n:match("attack")
+                        or n:match("deal") or n:match("hurt") or n:match("strike")
+                        or n:match("combat") or n:match("fight") or n:match("kill")
+                        or n:match("weapon") or n:match("sword") or n:match("gun") then
+                        table.insert(_buf_remotes, obj)
+                    end
+                end
+            end
+        end)
+    end
+
+    if #_buf_remotes > 0 then
+        DAMAGE_REMOTE = _buf_remotes[1]
+        if #_buf_remotes > 1 then DAMAGE_REMOTE_ALT = _buf_remotes[2] end
+        if #_buf_remotes > 2 then DAMAGE_REMOTE_TERT = _buf_remotes[3] end
+    end
+
+    -- Pad registration (GODLY – scans all bases)
+    local TycoonsFolder = workspace:FindFirstChild("Tycoons")
+    if TycoonsFolder then
+        pcall(function()
+            for _, d in ipairs(TycoonsFolder:GetDescendants()) do
+                if d:IsA("TouchTransmitter") and d.Parent and d.Parent.Parent
+                    and d.Parent.Parent.Name:find("GearGiver") then
+                    local base = d.Parent.Parent.Parent
+                    if base then
+                        local bn = base.Name
+                        if bn == "Stone" or bn == "Magic" or bn == "Storm" or bn == "Robotic"
+                            or bn == "Mecha" or bn == "Shadow" or bn == "Hyper" or bn == "Thunder"
+                            or bn == "Void" or bn == "Frozen" or bn == "Magma" or bn == "Nuclear"
+                            or bn == "Toxic" or bn == "Kong" then
+                            TG_padsByBase[bn] = TG_padsByBase[bn] or {}
+                            table.insert(TG_padsByBase[bn], d.Parent)
+                            TG_registered[d.Parent] = bn
+                        end
+                    end
+                end
+            end
+        end)
+    end
+    scansComplete = true
+end)
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 10: TYCOON HELPERS (1000x)                                ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function getPlayerTycoonType()
+    if cachedTycoonType and workspace:FindFirstChild("Tycoons")
+        and workspace.Tycoons:FindFirstChild(cachedTycoonType) then
+        return cachedTycoonType
+    end
+
+    local plot = workspace:FindFirstChild(player.Name)
+    if plot then
+        for _, child in ipairs(plot:GetChildren()) do
+            if child:IsA("StringValue") then
+                local n = child.Name:lower()
+                if n:find("tycoon") or n:find("type") or n:find("base") or n:find("theme") then
+                    cachedTycoonType = child.Value
+                    return cachedTycoonType
+                end
+            end
+        end
+    end
+
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        local closest, minDist = nil, math.huge
+        local tf = workspace:FindFirstChild("Tycoons")
+        if tf then
+            for _, t in ipairs(tf:GetChildren()) do
+                if t:IsA("Folder") then
+                    local door = t:FindFirstChild("Door", true)
+                    if door then
+                        local dp = door:FindFirstChildWhichIsA("BasePart")
+                        if dp then
+                            local d = (dp.Position - root.Position).Magnitude
+                            if d < minDist then minDist = d; closest = t.Name end
+                        end
+                    end
+                end
+            end
+        end
+        cachedTycoonType = closest
+        return closest
+    end
+    return nil
+end
+
+player.CharacterAdded:Connect(function() cachedTycoonType = nil end)
+
+local function getTouchableParts(model)
+    table.clear(_buf_parts)
+    for _, desc in ipairs(model:GetDescendants()) do
+        if desc:IsA("TouchTransmitter") and desc.Parent and desc.Parent:IsA("BasePart") then
+            table.insert(_buf_parts, desc.Parent)
+        end
+    end
+    if #_buf_parts == 0 then
+        for _, desc in ipairs(model:GetDescendants()) do
+            if desc:IsA("BasePart") then table.insert(_buf_parts, desc); break end
+        end
+    end
+    return _buf_parts
+end
+
+local function getPlayerCash()
+    local ls = player:FindFirstChild("leaderstats")
+    if ls then
+        for _, name in ipairs({"Cash", "Money", "Coins", "Gold", "Credits"}) do
+            local v = ls:FindFirstChild(name)
+            if v and (v:IsA("IntValue") or v:IsA("NumberValue")) then return v.Value end
+        end
+    end
+    return 0
+end
+
+local function getCost(obj)
+    local pv = obj:FindFirstChild("Price") or obj:FindFirstChild("Cost") or obj:FindFirstChild("Value")
+    if pv and (pv:IsA("IntValue") or pv:IsA("NumberValue")) then return pv.Value end
+    local attr = obj:GetAttribute("Price") or obj:GetAttribute("Cost")
+    if type(attr) == "number" then return attr end
+    return 0
+end
+
+local function getPriority(modelName)
+    local name = modelName:lower()
+    if name:find("robux") then return 999 end
+    local num = tonumber(name:match("%d+")) or 0
+    if name:find("gen") and not name:find("gear") then
+        if num <= 1 then return 10 + num
+        elseif num <= 3 then return 30 + num
+        elseif num <= 5 then return 50 + num
+        else return 70 + num end
+    end
+    if name:find("gear") or name:find("gun") then
+        if num <= 2 then return 20 + num
+        elseif num <= 5 then return 55 + num
+        else return 67 + num end
+    end
+    if name:find("wall") or name:find("door") or name:find("ladder") then return 40 + num end
+    if name:find("ultima") or name:find("effect") then return 80 end
+    return 90 + num
+end
+
+local function getServerPlayers()
+    table.clear(_buf_players)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then table.insert(_buf_players, p.Name) end
+    end
+    return #_buf_players > 0 and _buf_players or {"No Players"}
+end
+
+local function getToolPart(tool)
+    if tool:FindFirstChild("Handle") and tool.Handle:IsA("BasePart") then return tool.Handle end
+    for _, v in ipairs(tool:GetDescendants()) do if v:IsA("BasePart") then return v end end
+    return nil
+end
+
+local function getHRP(char)
+    return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 11: 1000x THREAT DETECTION ENGINE                         ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function updateThreatLevel()
+    if tick() - LastThreatCheck < 0.15 then return end
+    LastThreatCheck = tick()
+    local prevThreat = ThreatLevel
+    ThreatLevel = 0
+    local myChar = player.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+    local myPos = myChar.HumanoidRootPart.Position
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local theirRoot = plr.Character.HumanoidRootPart
+            local dist = (theirRoot.Position - myPos).Magnitude
+            local velocity = theirRoot.Velocity.Magnitude
+
+            if dist < ThreatRadius then
+                ThreatLevel = ThreatLevel + 1
+                if dist < ThreatRadius * 0.3 then ThreatLevel = ThreatLevel + 2 end
+                if dist < ThreatRadius * 0.1 then ThreatLevel = ThreatLevel + 3 end
+                if velocity > 20 then ThreatLevel = ThreatLevel + 1 end
+
+                -- Check if they have tools equipped (aggression indicator)
+                local hasTool = false
+                for _, item in ipairs(plr.Character:GetChildren()) do
+                    if item:IsA("Tool") then hasTool = true; break end
+                end
+                if hasTool then ThreatLevel = ThreatLevel + 1 end
+            end
+        end
+    end
+
+    ThreatTrend = ThreatLevel - prevThreat
+    if ThreatLevel > PeakThreat then PeakThreat = ThreatLevel end
+    ThreatDecay = math.max(0, ThreatDecay - 0.1)
+
+    table.insert(ThreatHistory, {time = tick(), level = ThreatLevel, trend = ThreatTrend})
+    if #ThreatHistory > 60 then table.remove(ThreatHistory, 1) end
+
+    -- Threat velocity tracking for AI
+    table.insert(ThreatVelocity, {time = tick(), delta = ThreatTrend})
+    if #ThreatVelocity > 30 then table.remove(ThreatVelocity, 1) end
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 12: SENTINEL AI – BAYESIAN THREAT PROFILER                ║
+-- ╚══════════════════════════════════════════════════════════════════════╝
+local function AI_GetOrCreateProfile(killerName)
+    if not ThreatProfiles[killerName] then
+        ThreatProfiles[killerName] = {
+            Name = killerName,
+            TotalKills = 0,
+            AvgDistance = 0,
+            AvgTTK = 0,
+            Weapons = {},
+            SuspectedFeatures = {},
+            Confidence = {},
+            LastSeen = 0,
+            EngagementHistory = {},
+            CounterHistory = {},
+            ThreatScore = 0,
+            FirstEncounter = os.time(),
+            WinRate = 0,
+            PositioningHabit = {},
+            WeaponSwitchPattern = {},
+            DeathVelocity = {},
+        }
+    end
+    return ThreatProfiles[killerName]
+end
+
+local function AI_DetectFeatures(killData, profile)
+    local features = {}
+
+    -- LOOPBRING DETECTION: Extremely fast TTK + close range + repeated
+    if killData.TTK < 0.3 and killData.Distance < 8 then
+        features["LoopBring"] = 85
+        if profile.TotalKills > 2 and profile.AvgTTK < 0.4 then
+            features["LoopBring"] = 95
+        end
+    end
+
+    -- KILL AURA DETECTION: Multiple rapid kills, medium range, no visible weapon swing
+    if killData.Distance > 5 and killData.Distance < 15 and killData.TTK < 0.5 then
+        features["KillAura"] = 75
+        if killData.Weapon == "Unknown" then
+            features["KillAura"] = 90
+        end
+    end
+
+    -- REACH DETECTION: Kills from impossible distance
+    if killData.Distance > 25 then
+        features["Reach"] = 80
+        if killData.Distance > 40 then
+            features["Reach"] = 95
+        end
+    end
+
+    -- FAST KILL / REMOTE SPAM: Very fast TTK regardless of distance
+    if killData.TTK < 0.2 then
+        features["FastKill"] = 85
+        features["RemoteSpam"] = 70
+    end
+
+    -- FIGHT EVENT ABUSE: No weapon detected, fast kills
+    if killData.Weapon == "Unknown" and killData.TTK < 0.5 then
+        features["FightEventAbuse"] = 80
+    end
+
+    -- HIT AMPLIFIER: Medium range, consistent TTK
+    if killData.Distance > 15 and killData.Distance <= 30 and killData.TTK < 0.8 then
+        features["HitAmplifier"] = 70
+    end
+
+    -- TOOL FOLLOW: Very close, persistent kills
+    if killData.Distance < 3 and profile.TotalKills > 3 then
+        features["ToolFollow"] = 75
+    end
+
+    -- SPAWN KILL: Kills happening very shortly after your respawn
+    if killData.TimeSinceRespawn and killData.TimeSinceRespawn < 2 then
+        features["SpawnKill"] = 90
+    end
+
+    -- TEMPORAL PATTERN: Deaths clustering in time windows
+    if #DeathTimestamps >= 3 then
+        local recentWindow = 0
+        for i = #DeathTimestamps, math.max(1, #DeathTimestamps - 4), -1 do
+            if DeathTimestamps[i] and DeathTimestamps[i-1] then
+                recentWindow = recentWindow + (DeathTimestamps[i] - DeathTimestamps[i-1])
+            end
+        end
+        if recentWindow < 5 and recentWindow > 0 then
+            features["BurstKillPattern"] = 80
+        end
+    end
+
+    return features
+end
+
+local function AI_CalculateThreatScore(profile)
+    local score = 0
+    score = score + math.min(profile.TotalKills * 2, 20)
+    score = score + math.min(profile.ThreatScore, 10)
+
+    for feature, confidence in pairs(profile.Confidence) do
+        score = score + math.floor(confidence / 20)
+    end
+
+    if profile.AvgTTK < 0.3 then score = score + 10 end
+    if profile.AvgDistance > 30 then score = score + 8 end
+    if profile.TotalKills > 5 then score = score + 5 end
+
+    -- Bayesian adjustment based on memory
+    if AIMemory.FeatureEffectiveness then
+        for feat, eff in pairs(AIMemory.FeatureEffectiveness) do
+            if profile.Confidence[feat] and eff < 0.3 then
+                score = score + 5 -- Increase threat if our counters failed before
+            end
+        end
+    end
+
+    return math.clamp(score, 0, 100)
+end
+
+local function AI_UpdateProfile(killerName, killData)
+    local profile = AI_GetOrCreateProfile(killerName)
+    profile.TotalKills = profile.TotalKills + 1
+    profile.LastSeen = os.time()
+
+    -- Running average for distance
+    profile.AvgDistance = ((profile.AvgDistance * (profile.TotalKills - 1)) + killData.Distance) / profile.TotalKills
+    -- Running average for TTK
+    profile.AvgTTK = ((profile.AvgTTK * (profile.TotalKills - 1)) + killData.TTK) / profile.TotalKills
+
+    -- Track weapons
+    if killData.Weapon and killData.Weapon ~= "Unknown" then
+        profile.Weapons[killData.Weapon] = (profile.Weapons[killData.Weapon] or 0) + 1
+    end
+
+    -- Store engagement
+    table.insert(profile.EngagementHistory, {
+        time = os.time(),
+        distance = killData.Distance,
+        ttk = killData.TTK,
+        weapon = killData.Weapon,
+        suspected = killData.Suspected,
+    })
+    if #profile.EngagementHistory > 50 then
+        table.remove(profile.EngagementHistory, 1)
+    end
+
+    -- Feature detection with confidence scoring (Bayesian update)
+    local features = AI_DetectFeatures(killData, profile)
+    for feature, confidence in pairs(features) do
+        local prev = profile.Confidence[feature] or 0
+        -- Bayesian smoothing: weight new evidence against prior
+        local learningRate = AIMemory.SessionLearningRate or 0.1
+        profile.Confidence[feature] = math.min(100, math.max(prev, prev * (1 - learningRate) + confidence * learningRate))
+        if confidence > 50 then
+            local found = false
+            for _, f in ipairs(profile.SuspectedFeatures) do
+                if f == feature then found = true; break end
+            end
+            if not found then table.insert(profile.SuspectedFeatures, feature) end
+        end
+    end
+
+    -- Calculate composite threat score
+    profile.ThreatScore = AI_CalculateThreatScore(profile)
+
+    -- Persist
+    writeJSON(AI_PROFILE_FILE, ThreatProfiles)
+    return profile
+end
+
+-- ╔══════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 13: SENTINEL AI – ADAPTIVE STRATEGY ENGINE                ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
 local function AI_FormulateStrategy(profile, killData)
     local strategy = {
@@ -9,6 +579,7 @@ local function AI_FormulateStrategy(profile, killData)
         Priority = "NORMAL",
         Confidence = 0,
         FeatureCombos = {},
+        MutatedFrom = nil,
     }
 
     local threats = profile.SuspectedFeatures
@@ -16,11 +587,22 @@ local function AI_FormulateStrategy(profile, killData)
     local avgTTK = profile.AvgTTK
     local totalKills = profile.TotalKills
 
-    -- Determine priority
+    -- Determine priority using threat score + temporal analysis
     if profile.ThreatScore >= 80 or totalKills >= 5 then
         strategy.Priority = "CRITICAL"
     elseif profile.ThreatScore >= 50 or totalKills >= 3 then
         strategy.Priority = "HIGH"
+    end
+
+    -- Check memory for previously failed strategies against this player
+    local previousFailure = nil
+    if AIMemory.StrategyResults then
+        for _, result in ipairs(AIMemory.StrategyResults) do
+            if result.Target == profile.Name and result.Success == false then
+                previousFailure = result
+                break
+            end
+        end
     end
 
     -- BUILD COUNTER-STRATEGY BASED ON DETECTED FEATURES
@@ -31,10 +613,17 @@ local function AI_FormulateStrategy(profile, killData)
             table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "ForceField blocks touch-based loopbring"})
             table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "NoCollide prevents touch contact"})
             table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Repel", reason = "Push their tools away from you"})
+            -- MUTATION: If previous strategy failed, add extra layer
+            if previousFailure then
+                table.insert(strategy.Actions, {type = "set", feature = "AntiAura.RepelForce", value = 200, reason = "PREVIOUS FAILED: Boosted repel force"})
+                table.insert(strategy.Actions, {type = "enable", feature = "InstaKillEnabled", reason = "PREVIOUS FAILED: Added offensive counter"})
+                strategy.MutatedFrom = previousFailure.StrategyID
+            end
             table.insert(strategy.Explanations,
                 "They're using LOOPBRING - teleporting their weapon to you repeatedly. " ..
                 "Average TTK: " .. string.format("%.2f", avgTTK) .. "s. " ..
-                "I'm activating a 5-layer defense: FastRespawn + AntiSpawnkill + GodMode + Phase + Repel.")
+                "I'm activating a 5-layer defense: FastRespawn + AntiSpawnkill + GodMode + Phase + Repel." ..
+                (previousFailure and " (MUTATED: Previous attempt failed, adding boosted repel + offense)" or ""))
 
         elseif feature == "KillAura" then
             table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Enabled", reason = "Master anti-aura switch"})
@@ -43,20 +632,31 @@ local function AI_FormulateStrategy(profile, killData)
             table.insert(strategy.Actions, {type = "set", feature = "AntiAura.RepelForce", value = 150, reason = "Maximum repel force to break aura range"})
             table.insert(strategy.Actions, {type = "set", feature = "AntiAura.RepelRadius", value = 25, reason = "Extended repel radius"})
             table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "Phase through their aura hits"})
+            if previousFailure then
+                table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.HealAura", reason = "PREVIOUS FAILED: Added heal to outpace DPS"})
+                strategy.MutatedFrom = previousFailure.StrategyID
+            end
             table.insert(strategy.Explanations,
                 "KILL AURA detected. They're damaging you through tool proximity without swinging. " ..
                 "Avg distance: " .. math.floor(avgDist) .. " studs. " ..
-                "Counter: Full Anti-Aura suite with boosted repel force (150) and radius (25).")
+                "Counter: Full Anti-Aura suite with boosted repel force (150) and radius (25)." ..
+                (previousFailure and " (MUTATED: Added HealAura due to prior failure)" or ""))
 
         elseif feature == "Reach" then
+            local reachMult = math.max(4, math.ceil(avgDist / 8))
             table.insert(strategy.Actions, {type = "enable", feature = "Reach", reason = "Match their reach"})
-            table.insert(strategy.Actions, {type = "set", feature = "ReachSize", value = math.max(4, math.ceil(avgDist / 8)), reason = "Scale reach to counter theirs"})
+            table.insert(strategy.Actions, {type = "set", feature = "ReachSize", value = reachMult, reason = "Scale reach to counter theirs"})
             table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "Phase to avoid their extended hitbox"})
             table.insert(strategy.Actions, {type = "enable", feature = "InstaKillEnabled", reason = "Strike first before they reach you"})
+            if previousFailure then
+                table.insert(strategy.Actions, {type = "set", feature = "ReachSize", value = reachMult + 2, reason = "PREVIOUS FAILED: Extra reach margin"})
+                strategy.MutatedFrom = previousFailure.StrategyID
+            end
             table.insert(strategy.Explanations,
                 "REACH user detected. Killing you from " .. math.floor(avgDist) .. " studs away. " ..
-                "I'm setting your reach to " .. math.max(4, math.ceil(avgDist / 8)) .. "x to match/exceed theirs, " ..
-                "plus Phase mode and InstaKill to strike first.")
+                "I'm setting your reach to " .. reachMult .. "x to match/exceed theirs, " ..
+                "plus Phase mode and InstaKill to strike first." ..
+                (previousFailure and " (MUTATED: +2 extra reach multiplier)" or ""))
 
         elseif feature == "FastKill" or feature == "RemoteSpam" then
             table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "ForceField blocks remote damage"})
@@ -64,10 +664,15 @@ local function AI_FormulateStrategy(profile, killData)
             table.insert(strategy.Actions, {type = "enable", feature = "FastRespawn", reason = "Minimize death downtime"})
             table.insert(strategy.Actions, {type = "enable", feature = "InstaKillEnabled", reason = "Kill them before they can spam again"})
             table.insert(strategy.Actions, {type = "set", feature = "IK_BurstCount", value = 15, reason = "Maximum burst to overwhelm their defense"})
+            if previousFailure then
+                table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Phase", reason = "PREVIOUS FAILED: Phase to dodge remotes"})
+                strategy.MutatedFrom = previousFailure.StrategyID
+            end
             table.insert(strategy.Explanations,
                 "FAST KILL / REMOTE SPAM detected. TTK: " .. string.format("%.2f", avgTTK) .. "s. " ..
                 "They're firing damage remotes as fast as possible. " ..
-                "Counter: GodMode + HealAura to survive, InstaKill with 15-burst to end them first.")
+                "Counter: GodMode + HealAura to survive, InstaKill with 15-burst to end them first." ..
+                (previousFailure and " (MUTATED: Added Phase for remote evasion)" or ""))
 
         elseif feature == "FightEventAbuse" then
             table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.Enabled", reason = "Full defense suite"})
@@ -100,6 +705,14 @@ local function AI_FormulateStrategy(profile, killData)
             table.insert(strategy.Explanations,
                 "SPAWN KILL detected. They're camping your spawn point. " ..
                 "AntiSpawnkill gives you 5 seconds of invincibility on spawn.")
+
+        elseif feature == "BurstKillPattern" then
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.GodMode", reason = "Survive burst window"})
+            table.insert(strategy.Actions, {type = "enable", feature = "AntiAura.HealAura", reason = "Regen between bursts"})
+            table.insert(strategy.Actions, {type = "enable", feature = "FastRespawn", reason = "Escape burst cycle"})
+            table.insert(strategy.Explanations,
+                "BURST KILL PATTERN detected. Deaths are clustering in rapid succession. " ..
+                "This suggests timed ability usage or macro-based attacks. GodMode + Heal breaks the cycle.")
         end
     end
 
@@ -127,7 +740,7 @@ local function AI_FormulateStrategy(profile, killData)
 end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 14: SENTINEL AI – EXECUTION ENGINE                        ║
+-- ║  SECTION 14: SENTINEL AI – EXECUTION ENGINE + MEMORY UPDATE        ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
 local function AI_ExecuteStrategy(strategy)
     if not strategy or not strategy.Actions then return end
@@ -191,16 +804,33 @@ local function AI_ExecuteStrategy(strategy)
         end)
     end
 
-    -- Record strategy execution
+    -- Record strategy execution in memory
+    local strategyID = HttpService:GenerateGUID(false)
     table.insert(StrategyEngine.StrategyHistory, {
         time = os.time(),
         target = strategy.Target,
         priority = strategy.Priority,
         actionCount = #strategy.Actions,
+        strategyID = strategyID,
+        mutatedFrom = strategy.MutatedFrom,
     })
-    if #StrategyEngine.StrategyHistory > 50 then
+    if #StrategyEngine.StrategyHistory > 100 then
         table.remove(StrategyEngine.StrategyHistory, 1)
     end
+
+    -- Update memory with strategy result placeholder (will be updated on next kill/survival)
+    table.insert(AIMemory.StrategyResults, {
+        StrategyID = strategyID,
+        Target = strategy.Target,
+        Time = os.time(),
+        Actions = strategy.Actions,
+        Success = nil, -- Will be determined by next engagement outcome
+        MutatedFrom = strategy.MutatedFrom,
+    })
+    if #AIMemory.StrategyResults > 100 then
+        table.remove(AIMemory.StrategyResults, 1)
+    end
+    writeJSON(AI_MEMORY_FILE, AIMemory)
 end
 
 -- ╔══════════════════════════════════════════════════════════════════════╗
@@ -727,6 +1357,7 @@ function AI_ProcessUserMessage(text)
         Chat_AddMessage("AI", "  'disable all' - Turn off all AI-activated features")
         Chat_AddMessage("AI", "  'why' - Explain current situation")
         Chat_AddMessage("AI", "  'target [name]' - Focus all systems on a player")
+        Chat_AddMessage("AI", "  'memory' - View AI learning statistics")
         Chat_AddMessage("AI", "  'clear' - Clear chat history")
         return
     end
@@ -742,6 +1373,7 @@ function AI_ProcessUserMessage(text)
         Chat_AddMessage("AI", "  Reach: " .. tostring(Reach) .. " (" .. ReachSize .. "x)")
         Chat_AddMessage("AI", "  AI State: " .. AI_State.Current)
         Chat_AddMessage("AI", "  Profiles Tracked: " .. tostring(#ThreatProfiles))
+        Chat_AddMessage("AI", "  Strategies in Memory: " .. tostring(#AIMemory.StrategyResults))
         return
     end
 
@@ -775,7 +1407,7 @@ function AI_ProcessUserMessage(text)
             Chat_AddMessage("AI", "  Threat Score: " .. found.ThreatScore .. "/100")
             Chat_AddMessage("AI", "  Suspected: " .. table.concat(found.SuspectedFeatures, ", "))
             for feat, conf in pairs(found.Confidence) do
-                Chat_AddMessage("AI", "  " .. feat .. " confidence: " .. conf .. "%")
+                Chat_AddMessage("AI", "  " .. feat .. " confidence: " .. math.floor(conf) .. "%")
             end
         else
             Chat_AddMessage("AI", "No profile found for '" .. profileMatch .. "'.")
@@ -787,7 +1419,7 @@ function AI_ProcessUserMessage(text)
     if lower:find("threats") or lower:find("threat") then
         Chat_AddMessage("AI", "Live Threat Assessment:")
         Chat_AddMessage("AI", "  Current Level: " .. ThreatLevel)
-        Chat_AddMessage("AI", "  Trend: " .. (ThreatTrend > 0 and "RISING" or ThreatTrend < 0 and "FALLING" or "STABLE"))
+        Chat_AddMessage("AI", "  Trend: " .. (ThreatTrend > 0 and "RISING ↑" or ThreatTrend < 0 and "FALLING ↓" or "STABLE →"))
         Chat_AddMessage("AI", "  Peak: " .. PeakThreat)
         Chat_AddMessage("AI", "  Radius: " .. ThreatRadius .. " studs")
         local nearby = 0
@@ -799,12 +1431,31 @@ function AI_ProcessUserMessage(text)
                     local d = (plr.Character.HumanoidRootPart.Position - myPos).Magnitude
                     if d < ThreatRadius then
                         nearby = nearby + 1
-                        Chat_AddMessage("AI", "  " .. plr.Name .. " - " .. math.floor(d) .. " studs away", Color3.fromRGB(255, 150, 50))
+                        Chat_AddMessage("AI", "  ⚠ " .. plr.Name .. " - " .. math.floor(d) .. " studs away", Color3.fromRGB(255, 150, 50))
                     end
                 end
             end
         end
-        if nearby == 0 then Chat_AddMessage("AI", "  No players within threat radius.") end
+        if nearby == 0 then Chat_AddMessage("AI", "  ✓ No players within threat radius.") end
+        return
+    end
+
+    -- Memory command
+    if lower:find("memory") then
+        Chat_AddMessage("AI", "AI Learning Statistics:")
+        Chat_AddMessage("AI", "  Strategies Stored: " .. #AIMemory.StrategyResults)
+        Chat_AddMessage("AI", "  Learning Rate: " .. tostring(AIMemory.SessionLearningRate))
+        local successes = 0
+        local failures = 0
+        for _, result in ipairs(AIMemory.StrategyResults) do
+            if result.Success == true then successes = successes + 1
+            elseif result.Success == false then failures = failures + 1 end
+        end
+        Chat_AddMessage("AI", "  Successful Counters: " .. successes)
+        Chat_AddMessage("AI", "  Failed Counters: " .. failures)
+        if successes + failures > 0 then
+            Chat_AddMessage("AI", "  Success Rate: " .. math.floor((successes / (successes + failures)) * 100) .. "%")
+        end
         return
     end
 
@@ -830,7 +1481,7 @@ function AI_ProcessUserMessage(text)
             local last = KillLogs[#KillLogs]
             Chat_AddMessage("AI", "Last kill analysis:")
             Chat_AddMessage("AI", "  You were killed by " .. last.Killer .. " using " .. last.Weapon)
-            Chat_AddMessage("AI", "  Distance: " .. last.Distance .. " studs")
+            Chat_AddMessage("AI", "  Distance: " .. last.Distance .. " studs | TTK: " .. string.format("%.2f", last.TTK) .. "s")
             Chat_AddMessage("AI", "  Suspected features: " .. table.concat(last.Suspected, ", "))
             Chat_AddMessage("AI", "  Recommended counters: " .. table.concat(last.Counter, " | "))
         end
@@ -863,6 +1514,7 @@ function AI_ProcessUserMessage(text)
             local s = AI_State.PendingStrategy
             Chat_AddMessage("AI", "Active Strategy against " .. s.Target .. ":")
             Chat_AddMessage("AI", "  Priority: " .. s.Priority .. " | Confidence: " .. s.Confidence .. "%")
+            if s.MutatedFrom then Chat_AddMessage("AI", "  ⚡ MUTATED from previous failed strategy", Color3.fromRGB(255, 200, 0)) end
             for i, a in ipairs(s.Actions) do
                 Chat_AddMessage("AI", "  " .. i .. ". " .. a.type:upper() .. " " .. a.feature)
             end
@@ -994,417 +1646,4 @@ end
 
 local function stopAuraLoop()
     if auraConn then auraConn:Disconnect(); auraConn = nil end
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 19: 1000x TOOL FOLLOW (PREDICTIVE VELOCITY TRACKING)     ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local cachedToolParts = {}
-local function updateToolCache()
-    table.clear(cachedToolParts)
-    local char = player.Character
-    if not char then return end
-    for _, tool in ipairs(char:GetChildren()) do
-        if tool:IsA("Tool") then
-            local part = getToolPart(tool)
-            if part then table.insert(cachedToolParts, part) end
-        end
-    end
-end
-
-local function startToolFollow()
-    if ToolFollow.Connection then ToolFollow.Connection:Disconnect() end
-    ToolFollow.Connection = RunService.PreSimulation:Connect(function()
-        if not ToolFollow.Enabled or #ToolFollow.Targets == 0 then return end
-        updateToolCache()
-        for _, targetPlr in ipairs(ToolFollow.Targets) do
-            local tChar = targetPlr.Character
-            if tChar and tChar:FindFirstChild("Humanoid") and tChar.Humanoid.Health > 0 then
-                local torso = tChar:FindFirstChild("UpperTorso") or tChar:FindFirstChild("Torso")
-                if torso then
-                    -- 1000x: Predictive positioning using velocity
-                    local vel = torso.Velocity
-                    local predictedPos = torso.Position + vel * 0.08 + Vector3.new(0, 0.8, 0.5)
-                    for _, part in ipairs(cachedToolParts) do
-                        if part and part.Parent then
-                            part.Position = predictedPos
-                            part.CanCollide = false
-                            part.Massless = true
-                            part.Anchored = false
-                        end
-                    end
-                end
-            end
-        end
-    end)
-end
-
-local function stopToolFollow()
-    if ToolFollow.Connection then ToolFollow.Connection:Disconnect(); ToolFollow.Connection = nil end
-end
-
-player.CharacterAdded:Connect(function(char)
-    char:WaitForChild("HumanoidRootPart")
-    updateToolCache()
-end)
-updateToolCache()
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 20: 1000x AUTO CLAIM & ADAPTIVE BUILD                     ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local function startClaimMoney()
-    if claimConn then claimConn:Disconnect() end
-    claimConn = RunService.PreSimulation:Connect(function()
-        if not AutoClaimMoney then return end
-        local myChar = player.Character
-        if not myChar then return end
-        local root = myChar:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local tycoonType = getPlayerTycoonType()
-        if not tycoonType then return end
-        local tycoonFolder = workspace:FindFirstChild("Tycoons") and workspace.Tycoons:FindFirstChild(tycoonType)
-        if not tycoonFolder then return end
-        -- Scan for ALL cash registers and money collectors
-        for _, obj in ipairs(tycoonFolder:GetDescendants()) do
-            local n = obj.Name:lower()
-            if n:find("cash") or n:find("register") or n:find("collect") or n:find("money") then
-                if obj:IsA("Model") or obj:IsA("BasePart") then
-                    for _, part in ipairs(getTouchableParts(obj)) do
-                        pcall(firetouchinterest, root, part, 0)
-                        pcall(firetouchinterest, root, part, 1)
-                    end
-                end
-            end
-        end
-    end)
-end
-
-local function stopClaimMoney()
-    if claimConn then claimConn:Disconnect(); claimConn = nil end
-end
-
-local lastBuyTime = 0
-local function startAutoBuild()
-    if buildConn then buildConn:Disconnect() end
-    buildConn = RunService.PreSimulation:Connect(function()
-        updateThreatLevel()
-        if not AutoBuild then return end
-        if tick() - lastBuyTime < 0.2 then return end  -- 1000x: faster buy cycle
-        local myChar = player.Character
-        if not myChar then return end
-        local root = myChar:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local tycoonType = getPlayerTycoonType()
-        if not tycoonType then return end
-        local tycoonFolder = workspace:FindFirstChild("Tycoons") and workspace.Tycoons:FindFirstChild(tycoonType)
-        if not tycoonFolder then return end
-        local cash = getPlayerCash()
-
-        table.clear(_buf_buttons)
-        for _, obj in ipairs(tycoonFolder:GetDescendants()) do
-            if obj:IsA("Model") then
-                local cost = getCost(obj)
-                if cost > 0 then
-                    table.insert(_buf_buttons, {Model = obj, Cost = cost, Priority = getPriority(obj.Name)})
-                end
-            end
-        end
-
-        table.sort(_buf_buttons, function(a, b)
-            if a.Priority == b.Priority then return a.Cost < b.Cost end
-            return a.Priority < b.Priority
-        end)
-
-        -- 1000x: Buy MULTIPLE items per cycle if affordable
-        local bought = 0
-        for _, btnData in ipairs(_buf_buttons) do
-            if cash >= btnData.Cost and bought < 3 then
-                for _, part in ipairs(getTouchableParts(btnData.Model)) do
-                    pcall(firetouchinterest, root, part, 0)
-                    pcall(firetouchinterest, root, part, 1)
-                end
-                cash = cash - btnData.Cost
-                bought = bought + 1
-            end
-        end
-        if bought > 0 then lastBuyTime = tick() end
-    end)
-end
-
-local function stopAutoBuild()
-    if buildConn then buildConn:Disconnect(); buildConn = nil end
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 21: 1000x ANTI-AURA (SHIELD STACK + HEAL + REFLECT)      ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local function startAntiAura()
-    if antiAuraConn then antiAuraConn:Disconnect() end
-    antiAuraConn = RunService.Heartbeat:Connect(function()
-        if not AntiAura.Enabled then return end
-        local myChar = player.Character
-        if not myChar then return end
-        local root = myChar:FindFirstChild("HumanoidRootPart")
-        local hum = myChar:FindFirstChild("Humanoid")
-        if not root or not hum then return end
-
-        -- GOD MODE: ForceField + auto-heal
-        if AntiAura.GodMode then
-            if not antiAuraFF or not antiAuraFF.Parent then
-                antiAuraFF = Instance.new("ForceField")
-                antiAuraFF.Visible = false
-                antiAuraFF.Parent = myChar
-            end
-            if hum.Health < hum.MaxHealth * 0.7 then
-                hum.Health = hum.MaxHealth
-            end
-        else
-            if antiAuraFF and antiAuraFF.Parent then
-                antiAuraFF:Destroy()
-                antiAuraFF = nil
-            end
-        end
-
-        -- HEAL AURA: Continuous regeneration
-        if AntiAura.HealAura then
-            if hum.Health < hum.MaxHealth then
-                hum.Health = math.min(hum.MaxHealth, hum.Health + hum.MaxHealth * 0.05)
-            end
-        end
-
-        -- 1000x REPEL: Extended radius + boosted force + ALL tools
-        if AntiAura.Repel then
-            for _, otherPlr in ipairs(Players:GetPlayers()) do
-                if otherPlr ~= player and otherPlr.Character then
-                    for _, tool in ipairs(otherPlr.Character:GetChildren()) do
-                        if tool:IsA("Tool") then
-                            local handle = tool:FindFirstChild("Handle")
-                            if handle then
-                                local dist = (handle.Position - root.Position).Magnitude
-                                if dist < AntiAura.RepelRadius then
-                                    local dir = (root.Position - handle.Position).Unit
-                                    pcall(function()
-                                        handle.AssemblyLinearVelocity = dir * AntiAura.RepelForce
-                                        handle.CanCollide = false
-                                    end)
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        -- PHASE: Full no-collide on all parts
-        if AntiAura.Phase then
-            for _, part in ipairs(myChar:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
-            end
-        end
-    end)
-end
-
-local function stopAntiAura()
-    if antiAuraConn then antiAuraConn:Disconnect(); antiAuraConn = nil end
-    if antiAuraFF and antiAuraFF.Parent then antiAuraFF:Destroy(); antiAuraFF = nil end
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 22: 1000x REACH (DYNAMIC THREAT-BASED SIZING)            ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local reachOriginalSizes = {}
-local reachHL = {}
-
-local function applyReach()
-    local myChar = player.Character
-    if not myChar then return end
-    for _, t in ipairs(myChar:GetChildren()) do
-        if t:IsA("Tool") then
-            local part = getToolPart(t)
-            if part then
-                if not reachOriginalSizes[part] then
-                    reachOriginalSizes[part] = part.Size
-                end
-                part.Size = reachOriginalSizes[part] * ReachSize
-                part.Massless = true
-                part.CanCollide = false
-                if not reachHL[part] then
-                    local hl = Instance.new("Highlight", part)
-                    hl.FillTransparency = 1
-                    hl.OutlineColor = AccentColor
-                    reachHL[part] = hl
-                end
-            end
-        end
-    end
-end
-
-local function stopReach()
-    for part, hl in pairs(reachHL) do
-        if hl and hl.Parent == part then hl:Destroy() end
-    end
-    table.clear(reachHL)
-    for part, origSize in pairs(reachOriginalSizes) do
-        if part and part.Parent then part.Size = origSize end
-    end
-    table.clear(reachOriginalSizes)
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 23: 1000x FAST RESPAWN                                   ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local function startFastRespawn()
-    local Guide = ReplicatedStorage:FindFirstChild("Guide")
-    local last = 0
-    local function respawn()
-        if tick() - last < 0.02 then return end  -- 1000x: faster threshold
-        last = tick()
-        pcall(function()
-            if Guide then Guide:FireServer() else player:LoadCharacter() end
-        end)
-    end
-    local function hook(c)
-        local hum = c:WaitForChild("Humanoid")
-        hum.HealthChanged:Connect(function(hp) if hp <= 0 then respawn() end end)
-        hum.Died:Connect(respawn)
-    end
-    if player.Character then hook(player.Character) end
-    player.CharacterAdded:Connect(hook)
-end
-
--- ╔══════════════════════════════════════════════════════════════════════╗
--- ║  SECTION 24: 1000x INSTA-KILL (PARALLEL MULTI-BURST + SWEEP)      ║
--- ╚══════════════════════════════════════════════════════════════════════╝
-local function IK_RefreshTools()
-    table.clear(IK_ToolsCache)
-    local char = player.Character
-    if not char then return end
-    for _, tool in ipairs(char:GetChildren()) do
-        if tool:IsA("Tool") then
-            local fightEvent = tool:FindFirstChild("FightEvent", true)
-            local touchPart = tool:FindFirstChildWhichIsA("TouchTransmitter", true)
-            if fightEvent and fightEvent:IsA("RemoteEvent") then
-                table.insert(IK_ToolsCache, {
-                    Tool = tool,
-                    FightEvent = fightEvent,
-                    TouchPart = touchPart and touchPart.Parent or nil
-                })
-            elseif touchPart then
-                table.insert(IK_ToolsCache, {
-                    Tool = tool,
-                    FightEvent = nil,
-                    TouchPart = touchPart.Parent
-                })
-            end
-        end
-    end
-    -- Also scan Backpack
-    local bp = player:FindFirstChildOfClass("Backpack")
-    if bp then
-        for _, tool in ipairs(bp:GetChildren()) do
-            if tool:IsA("Tool") then
-                local fightEvent = tool:FindFirstChild("FightEvent", true)
-                if fightEvent and fightEvent:IsA("RemoteEvent") then
-                    table.insert(IK_ToolsCache, {
-                        Tool = tool,
-                        FightEvent = fightEvent,
-                        TouchPart = nil
-                    })
-                end
-            end
-        end
-    end
-end
-
-local function IK_GetTarget()
-    local myChar = player.Character
-    local myRoot = myChar and getHRP(myChar)
-    if not myRoot then return nil end
-    local bestChar, bestDist = nil, 50  -- 1000x: expanded range
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local char = plr.Character
-            if char then
-                local root = getHRP(char)
-                if root then
-                    local hum = char:FindFirstChildOfClass("Humanoid")
-                    if hum and hum.Health > 0 then
-                        local dist = (root.Position - myRoot.Position).Magnitude
-                        if dist < bestDist then
-                            bestDist = dist
-                            bestChar = char
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return bestChar
-end
-
-local function IK_MicroBurst(targetChar, burstCount)
-    if not targetChar or not player.Character then return end
-    -- 1000x: ALL body parts targeted
-    table.clear(IK_TargetParts)
-    for _, name in ipairs({"HumanoidRootPart", "UpperTorso", "Torso", "Head",
-                           "LowerTorso", "LeftUpperArm", "RightUpperArm",
-                           "LeftUpperLeg", "RightUpperLeg"}) do
-        local part = targetChar:FindFirstChild(name)
-        if part and part:IsA("BasePart") then
-            table.insert(IK_TargetParts, part)
-        end
-    end
-    if #IK_TargetParts == 0 then return end
-
-    -- PARALLEL FIRE: All tools simultaneously
-    for _, toolData in ipairs(IK_ToolsCache) do
-        local tool = toolData.Tool
-        local fight = toolData.FightEvent
-        local touch = toolData.TouchPart
-        if tool and tool.Parent then
-            if fight then
-                pcall(function()
-                    for _ = 1, burstCount do fight:FireServer() end
-                end)
-            else
-                pcall(tool.Activate, tool)
-            end
-            if touch then
-                for _, part in ipairs(IK_TargetParts) do
-                    if part and part.Parent then
-                        pcall(firetouchinterest, touch, part, 0)
-                        pcall(firetouchinterest, touch, part, 1)
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function startInstaKill()
-    if InstaKillConn then InstaKillConn:Disconnect() end
-    IK_RefreshTools()
-    InstaKillConn = RunService.PreSimulation:Connect(function()
-        if not InstaKillEnabled then return end
-        local now = os.clock()
-        if now - IK_LastActivation < 1/120 then return end  -- 1000x: 120Hz
-        IK_LastActivation = now
-        IK_RefreshTools()
-        if #IK_ToolsCache == 0 then return end
-
-        local adaptiveBurst = IK_BurstCount
-        if IK_AdaptiveBurst and ThreatLevel > 2 then
-            adaptiveBurst = IK_BurstCount + ThreatLevel * 2  -- 1000x scaling
-        end
-        local target = IK_GetTarget()
-        if target then
-            IK_MicroBurst(target, adaptiveBurst)
-        end
-    end)
-end
-
-local function stopInstaKill()
-    if InstaKillConn then InstaKillConn:Disconnect(); InstaKillConn = nil end
 end
